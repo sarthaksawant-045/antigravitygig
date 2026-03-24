@@ -1,0 +1,10 @@
+flask
+flask-cors
+requests
+werkzeug
+rapidfuzz
+razorpay
+numpy
+faiss-cpu
+sentence-transformers
+google-generativeai
