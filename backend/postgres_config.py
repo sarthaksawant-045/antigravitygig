@@ -15,7 +15,7 @@ POSTGRES_CONFIG = {
     'port': os.getenv('POSTGRES_PORT', '5432'),
     'database': os.getenv('POSTGRES_DB', 'gigbridge'),
     'user': os.getenv('POSTGRES_USER', 'postgres'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'Sarthak123'),
+    'password': os.getenv('POSTGRES_PASSWORD', 'sarthak123'),
 }
 
 def get_postgres_connection():
