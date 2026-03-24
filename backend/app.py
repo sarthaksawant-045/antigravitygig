@@ -22,11 +22,18 @@ from admin_routes import admin_bp
 from kyc_routes import kyc_bp
 from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 try:
     # AI chat routes are optional; failure must not block server startup.
     from ai_chat_routes import register_ai_chat_routes
 except Exception as _e:
     register_ai_chat_routes = None
+    logger.warning(f"AI chat disabled: {type(_e).__name__}: {_e}")
     import logging
     logging.getLogger(__name__).warning(f"AI chat disabled: {type(_e).__name__}: {_e}")
 
@@ -1182,13 +1189,12 @@ def get_freelancer_profile_by_id(freelancer_id):
         if conn:
             conn.close()
 
-
-# ============================================================
 # LOGIN APIs (CORE LOGIC SAME)
 # ============================================================
 
 @app.route("/client/login", methods=["POST"])
 def client_login():
+    """Enhanced client login with proper database error handling"""
     d = get_json()
     missing = require_fields(d, ["email", "password"])
     if missing:
@@ -1197,13 +1203,35 @@ def client_login():
     email = str(d["email"]).strip().lower()
     password = str(d["password"])
 
-    conn = client_db()
-    cur = get_dict_cursor(conn)
-    cur.execute("SELECT id,password,name FROM client WHERE email=%s", (email,))
-    row = cur.fetchone()
-    conn.close()
+    # Database connection with proper error handling
+    conn = None
+    try:
+        conn = client_db()
+        cur = get_dict_cursor(conn)
+        cur.execute("SELECT id,password,name FROM client WHERE email=%s", (email,))
+        row = cur.fetchone()
+        
+    except psycopg2.OperationalError as e:
+        logger.error(f"Database connection error during client login: {e}")
+        return jsonify({
+            "success": False, 
+            "msg": "Database connection failed. Please try again later.",
+            "error_type": "database_error"
+        }), 503
+    except Exception as e:
+        logger.error(f"Unexpected database error during client login: {e}")
+        return jsonify({
+            "success": False, 
+            "msg": "An error occurred. Please try again later.",
+            "error_type": "server_error"
+        }), 500
+    finally:
+        if conn:
+            conn.close()
 
+    # Authentication logic
     if row and check_password_hash(row["password"], password):
+        # Check if user is disabled
         if FEATURE_BLOCK_DISABLED_USERS:
             try:
                 c2 = client_db()
@@ -1213,21 +1241,28 @@ def client_login():
                 c2.close()
                 if en and int(en.get("is_enabled", 1)) != 1:
                     return jsonify({"success": False, "msg": "Account disabled"}), 403
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to check disabled status for client {row['id']}: {e}")
+                
+        # Send login email (non-blocking)
         try:
             send_login_email(email, row["name"], "Client", "login")
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to send login email: {e}")
+            
         # Check if profile is completed
+        profile_done = False
         try:
             pc = client_db()
             pcc = get_dict_cursor(pc)
             pcc.execute("SELECT 1 FROM client_profile WHERE client_id=%s", (row["id"],))
             profile_done = pcc.fetchone() is not None
             pc.close()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to check profile completion for client {row['id']}: {e}")
             profile_done = False
+            
+        logger.info(f"Client login successful: {email} (ID: {row['id']})")
         return jsonify({
             "success": True,
             "id": row["id"],
@@ -1238,10 +1273,12 @@ def client_login():
             "profile_completed": profile_done,
         })
 
+    logger.warning(f"Failed login attempt for client: {email}")
     return jsonify({"success": False, "msg": "Invalid credentials"})
 
 @app.route("/freelancer/login", methods=["POST"])
 def freelancer_login():
+    """Enhanced freelancer login with proper database error handling"""
     d = get_json()
     missing = require_fields(d, ["email", "password"])
     if missing:
@@ -1250,13 +1287,35 @@ def freelancer_login():
     email = str(d["email"]).strip().lower()
     password = str(d["password"])
 
-    conn = freelancer_db()
-    cur = get_dict_cursor(conn)
-    cur.execute("SELECT id,password,name FROM freelancer WHERE email=%s", (email,))
-    row = cur.fetchone()
-    conn.close()
+    # Database connection with proper error handling
+    conn = None
+    try:
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        cur.execute("SELECT id,password,name FROM freelancer WHERE email=%s", (email,))
+        row = cur.fetchone()
+        
+    except psycopg2.OperationalError as e:
+        logger.error(f"Database connection error during freelancer login: {e}")
+        return jsonify({
+            "success": False, 
+            "msg": "Database connection failed. Please try again later.",
+            "error_type": "database_error"
+        }), 503
+    except Exception as e:
+        logger.error(f"Unexpected database error during freelancer login: {e}")
+        return jsonify({
+            "success": False, 
+            "msg": "An error occurred. Please try again later.",
+            "error_type": "server_error"
+        }), 500
+    finally:
+        if conn:
+            conn.close()
 
+    # Authentication logic
     if row and check_password_hash(row["password"], password):
+        # Check if user is disabled
         if FEATURE_BLOCK_DISABLED_USERS:
             try:
                 f2 = freelancer_db()
@@ -1266,21 +1325,28 @@ def freelancer_login():
                 f2.close()
                 if en and int(en.get("is_enabled", 1)) != 1:
                     return jsonify({"success": False, "msg": "Account disabled"}), 403
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to check disabled status for freelancer {row['id']}: {e}")
+                
+        # Send login email (non-blocking)
         try:
             send_login_email(email, row["name"], "Freelancer", "login")
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to send login email: {e}")
+            
         # Check if profile is completed
+        profile_done = False
         try:
             fp2 = freelancer_db()
             fpc = get_dict_cursor(fp2)
             fpc.execute("SELECT 1 FROM freelancer_profile WHERE freelancer_id=%s", (row["id"],))
             profile_done = fpc.fetchone() is not None
             fp2.close()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to check profile completion for freelancer {row['id']}: {e}")
             profile_done = False
+            
+        logger.info(f"Freelancer login successful: {email} (ID: {row['id']})")
         return jsonify({
             "success": True,
             "id": row["id"],
@@ -1291,6 +1357,7 @@ def freelancer_login():
             "profile_completed": profile_done,
         })
 
+    logger.warning(f"Failed login attempt for freelancer: {email}")
     return jsonify({"success": False, "msg": "Invalid credentials"})
 
 # ============================================================
@@ -1362,14 +1429,11 @@ def client_profile():
         INSERT INTO notification (client_id, message, title, related_entity_type, created_at)
         VALUES (%s, %s, %s, %s, %s)
     """, (d["client_id"], enhanced_message, "Profile Update", "SYSTEM", now_ts()))
-    c2.commit()
-    c2.close()
-
-    return jsonify({"success": True})
 
 @app.route("/freelancer/profile", methods=["POST"])
 def freelancer_profile():
     d = get_json()
+    print(f"DEBUG: Received payload: {d}")  # Debug line
     missing = require_fields(
         d,
         [
@@ -1383,9 +1447,10 @@ def freelancer_profile():
             "dob",
         ],
     )
+    print(f"DEBUG: Missing fields: {missing}")  # Debug line
     if missing:
-        return jsonify({"success": False, "msg": "Missing fields"}), 400
-
+        return jsonify({"success": False, "msg": f"Missing fields: {', '.join(missing)}"}), 400
+    
     if not is_valid_category(d["category"]):
         return jsonify({"success": False, "msg": "Invalid category"}), 400
 
@@ -6798,4 +6863,29 @@ def freelancer_notifications_by_id():
 
 
 if __name__ == "__main__":
+    # Test database connection before starting server
+    logger.info("Starting GigBridge backend server...")
+    logger.info("Testing database connection...")
+    
+    try:
+        from postgres_config import test_database_connection, ensure_database_exists
+        
+        # Ensure database exists
+        if ensure_database_exists():
+            logger.info("Database validation passed")
+        else:
+            logger.error("Failed to ensure database exists")
+            
+        # Test connection
+        if test_database_connection():
+            logger.info("Database connection test passed")
+        else:
+            logger.error("Database connection test failed")
+            
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.error("Please ensure PostgreSQL is running and configured correctly")
+        logger.error("Server will start but database operations may fail")
+    
+    logger.info("Starting Flask server on http://0.0.0.0:5000")
     app.run(debug=True, host="0.0.0.0", port=5000)

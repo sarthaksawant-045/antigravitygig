@@ -74,4 +74,9 @@ export const freelancerService = {
       ...extra,
     });
   },
+
+  // Get freelancer packages for package-based pricing
+  getFreelancerPackages: async (freelancerId) => {
+    return await api.get(`/freelancer/${freelancerId}/packages`);
+  },
 };

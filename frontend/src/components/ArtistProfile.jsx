@@ -38,10 +38,18 @@ export default function ArtistProfile() {
     event_pincode: "",
     proposed_budget: "",
     note: "",
+    // Dynamic fields based on pricing type
+    start_time: "",
+    end_time: "",
+    number_of_persons: "",
+    selected_package_id: "",
+    guest_count: "",
   });
   const [hireLoading, setHireLoading] = useState(false);
   const [hireError, setHireError] = useState("");
   const [hireSuccess, setHireSuccess] = useState("");
+  const [freelancerPricingType, setFreelancerPricingType] = useState(null);
+  const [freelancerPackages, setFreelancerPackages] = useState([]);
 
   // Fetch real profile from backend
   useEffect(() => {
@@ -53,6 +61,35 @@ export default function ArtistProfile() {
         if (!data || data.success === false) {
           setNotFound(true);
         } else {
+          // Determine pricing type based on category
+          let pricingType = null;
+          const category = data.category;
+          if (category) {
+            // Map categories to pricing types (same logic as backend)
+            const categoryLower = category.toLowerCase();
+            if (["dj", "singer", "anchor", "band / live music", "dancer", "magician / entertainer"].includes(categoryLower)) {
+              pricingType = "hourly";
+            } else if (["makeup artist", "mehendi artist"].includes(categoryLower)) {
+              pricingType = "per_person";
+            } else if (["photographer", "videographer", "choreographer", "artist"].includes(categoryLower)) {
+              pricingType = "package";
+            } else if (["decorator", "wedding planner", "event organizer"].includes(categoryLower)) {
+              pricingType = "project";
+            }
+          }
+          setFreelancerPricingType(pricingType);
+
+          // If package pricing, fetch packages
+          if (pricingType === "package") {
+            try {
+              const packagesData = await freelancerService.getFreelancerPackages(id);
+              setFreelancerPackages(packagesData.packages || []);
+            } catch (err) {
+              console.error("Failed to fetch packages:", err);
+              setFreelancerPackages([]);
+            }
+          }
+
           // Normalize fields
           setProfile({
             id: data.freelancer_id || data.id,
@@ -64,7 +101,7 @@ export default function ArtistProfile() {
             image: data.profile_image ||
               `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name || "A")}&background=random&size=256`,
             experience: data.experience ? `${data.experience} Years` : "",
-            dob: data.dob || "", // Added dob
+            dob: data.dob || "",
             portfolio: data.skills
               ? (typeof data.skills === "string" ? data.skills.split(",").map(s => s.trim()).filter(Boolean) : data.skills)
               : [],
@@ -94,18 +131,41 @@ export default function ArtistProfile() {
     setHireError("");
     setHireSuccess("");
     try {
-      const res = await clientService.hireFreelancer({
+      // Build base payload
+      const payload = {
         client_id: user.id,
         freelancer_id: Number(id),
-        contract_type: "FIXED",
-        proposed_budget: parseFloat(hireForm.proposed_budget) || 0,
-        note: hireForm.note,
+        contract_type: "FIXED", // Will be overridden by backend logic
         event_date: hireForm.event_date,
         event_address: hireForm.event_address,
         event_city: hireForm.event_city,
         event_pincode: hireForm.event_pincode,
         venue_source: "custom",
-      });
+        note: hireForm.note,
+      };
+
+      // Add pricing-type-specific fields
+      if (freelancerPricingType === "hourly") {
+        payload.contract_type = "HOURLY";
+        payload.start_time = hireForm.start_time;
+        payload.end_time = hireForm.end_time;
+      } else if (freelancerPricingType === "per_person") {
+        payload.number_of_persons = parseInt(hireForm.number_of_persons) || 1;
+        payload.proposed_budget = 0; // Backend will calculate
+      } else if (freelancerPricingType === "package") {
+        payload.selected_package_id = parseInt(hireForm.selected_package_id) || null;
+        payload.proposed_budget = 0; // Backend will calculate from package
+      } else if (freelancerPricingType === "project") {
+        payload.proposed_budget = parseFloat(hireForm.proposed_budget) || 0;
+        if (hireForm.guest_count) {
+          payload.guest_count = parseInt(hireForm.guest_count) || null;
+        }
+      } else {
+        // Fallback for unknown pricing types
+        payload.proposed_budget = parseFloat(hireForm.proposed_budget) || 0;
+      }
+
+      const res = await clientService.hireFreelancer(payload);
       if (res.success) {
         setHireSuccess(`Hire request sent! Request ID: ${res.request_id}`);
         setTimeout(() => { setHireOpen(false); setHireSuccess(""); }, 2500);
@@ -251,6 +311,17 @@ export default function ArtistProfile() {
             <h3>Book / Hire {profile.name}</h3>
             {hireSuccess && <div style={{ color: '#16a34a', marginBottom: '1rem', padding: '0.75rem', background: '#f0fdf4', borderRadius: '8px' }}>{hireSuccess}</div>}
             {hireError && <div style={{ color: '#dc2626', marginBottom: '1rem', padding: '0.75rem', background: '#fef2f2', borderRadius: '8px' }}>{hireError}</div>}
+            
+            {freelancerPricingType && (
+              <div style={{ marginBottom: '1rem', padding: '0.5rem', background: '#f3f4f6', borderRadius: '6px', fontSize: '0.85rem' }}>
+                <strong>Pricing Type:</strong> {freelancerPricingType.replace('_', ' ').toUpperCase()}
+                {freelancerPricingType === 'per_person' && <span> - Please specify number of persons</span>}
+                {freelancerPricingType === 'hourly' && <span> - Please specify date and time slots</span>}
+                {freelancerPricingType === 'package' && <span> - Please select a package</span>}
+                {freelancerPricingType === 'project' && <span> - Please specify your budget</span>}
+              </div>
+            )}
+
             <form onSubmit={handleHireSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <label>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Event Date *</span>
@@ -258,12 +329,80 @@ export default function ArtistProfile() {
                   onChange={e => setHireForm(f => ({ ...f, event_date: e.target.value }))}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
               </label>
+
+              {/* Hourly pricing fields */}
+              {freelancerPricingType === 'hourly' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <label>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Start Time *</span>
+                      <input type="time" required value={hireForm.start_time}
+                        onChange={e => setHireForm(f => ({ ...f, start_time: e.target.value }))}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
+                    </label>
+                    <label>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>End Time *</span>
+                      <input type="time" required value={hireForm.end_time}
+                        onChange={e => setHireForm(f => ({ ...f, end_time: e.target.value }))}
+                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {/* Per-person pricing fields */}
+              {freelancerPricingType === 'per_person' && (
+                <label>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Number of Persons *</span>
+                  <input type="number" min="1" required value={hireForm.number_of_persons} placeholder="e.g., 5"
+                    onChange={e => setHireForm(f => ({ ...f, number_of_persons: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
+                </label>
+              )}
+
+              {/* Package pricing fields */}
+              {freelancerPricingType === 'package' && (
+                <label>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Select Package *</span>
+                  <select required value={hireForm.selected_package_id}
+                    onChange={e => setHireForm(f => ({ ...f, selected_package_id: e.target.value }))}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }}>
+                    <option value="">Choose a package...</option>
+                    {freelancerPackages.map(pkg => (
+                      <option key={pkg.id} value={pkg.id}>
+                        {pkg.package_name} - ₹{pkg.price}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {/* Project pricing fields */}
+              {freelancerPricingType === 'project' && (
+                <>
+                  <label>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Proposed Budget (₹) *</span>
+                    <input type="number" min="0" required value={hireForm.proposed_budget} placeholder="e.g., 15000"
+                      onChange={e => setHireForm(f => ({ ...f, proposed_budget: e.target.value }))}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
+                  </label>
+                  <label>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Guest Count (optional)</span>
+                    <input type="number" min="1" value={hireForm.guest_count} placeholder="e.g., 100"
+                      onChange={e => setHireForm(f => ({ ...f, guest_count: e.target.value }))}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
+                  </label>
+                </>
+              )}
+
+              {/* Event location fields (shown for all types except maybe some specific cases) */}
               <label>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Event Address *</span>
                 <input type="text" required value={hireForm.event_address} placeholder="Street address"
                   onChange={e => setHireForm(f => ({ ...f, event_address: e.target.value }))}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
               </label>
+              
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                 <label>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>City *</span>
@@ -278,18 +417,14 @@ export default function ArtistProfile() {
                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
                 </label>
               </div>
-              <label>
-                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Proposed Budget (₹)</span>
-                <input type="number" min="0" value={hireForm.proposed_budget} placeholder="0"
-                  onChange={e => setHireForm(f => ({ ...f, proposed_budget: e.target.value }))}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px' }} />
-              </label>
+
               <label>
                 <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Note / Requirements</span>
                 <textarea rows="3" value={hireForm.note} placeholder="Tell the artist what you need…"
                   onChange={e => setHireForm(f => ({ ...f, note: e.target.value }))}
                   style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px', marginTop:'4px', resize:'vertical' }} />
               </label>
+              
               <div className="ba-modal-actions">
                 <button type="button" className="ba-view" onClick={() => { setHireOpen(false); setHireError(""); }}>Cancel</button>
                 <button type="submit" className="ba-invite" disabled={hireLoading}>

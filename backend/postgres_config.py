@@ -7,31 +7,106 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import psycopg2.errors
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # PostgreSQL Connection Configuration
-# Set these environment variables or modify the defaults below
-POSTGRES_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'port': os.getenv('POSTGRES_PORT', '5432'),
-    'database': os.getenv('POSTGRES_DB', 'gigbridge'),
-    'user': os.getenv('POSTGRES_USER', 'postgres'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'sarthak123'),
-}
+# Load from environment variables with secure defaults
+def get_postgres_config():
+    """Get PostgreSQL configuration from environment variables"""
+    return {
+        'host': os.getenv('POSTGRES_HOST', 'localhost'),
+        'port': int(os.getenv('POSTGRES_PORT', '5432')),
+        'database': os.getenv('POSTGRES_DB', 'gigbridge'),
+        'user': os.getenv('POSTGRES_USER', 'postgres'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'sarthak123'),
+    }
+
+# Global connection pool for better performance
+_connection_pool = []
+_max_pool_size = 5
 
 def get_postgres_connection():
-    """Get a PostgreSQL connection using environment variables"""
+    """Get a PostgreSQL connection with proper error handling and logging"""
+    config = get_postgres_config()
+    
     try:
-        conn = psycopg2.connect(**POSTGRES_CONFIG)
+        logger.info(f"Connecting to PostgreSQL: {config['host']}:{config['port']}/{config['database']}")
+        conn = psycopg2.connect(**config)
         conn.autocommit = False
+        
+        # Test the connection
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        
+        logger.info("PostgreSQL connection successful")
         return conn
+        
     except psycopg2.OperationalError as e:
-        print(f"PostgreSQL connection error: {e}")
-        print("Please ensure PostgreSQL is running and configuration is correct:")
-        print(f"Host: {POSTGRES_CONFIG['host']}")
-        print(f"Port: {POSTGRES_CONFIG['port']}")
-        print(f"Database: {POSTGRES_CONFIG['database']}")
-        print(f"User: {POSTGRES_CONFIG['user']}")
+        logger.error(f"PostgreSQL connection error: {e}")
+        logger.error("Please ensure:")
+        logger.error(f"  - PostgreSQL is running on {config['host']}:{config['port']}")
+        logger.error(f"  - Database '{config['database']}' exists")
+        logger.error(f"  - User '{config['user']}' has correct permissions")
+        logger.error(f"  - Password is correct")
+        logger.error("\nTo start PostgreSQL on Windows:")
+        logger.error("  1. Open Services and find 'postgresql-x64-XX'")
+        logger.error("  2. Right-click and select 'Start'")
+        logger.error("  3. Or run: net start postgresql-x64-XX")
         raise
+    except Exception as e:
+        logger.error(f"Unexpected database connection error: {e}")
+        raise
+
+def test_database_connection():
+    """Test database connection and return status"""
+    try:
+        conn = get_postgres_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT version()")
+            version = cursor.fetchone()[0]
+        conn.close()
+        logger.info(f"Database connection test passed: {version[:50]}...")
+        return True
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
+        return False
+
+def ensure_database_exists():
+    """Ensure the database exists, create if necessary"""
+    config = get_postgres_config()
+    db_name = config['database']
+    
+    try:
+        # Connect to default 'postgres' database to create our database
+        admin_config = config.copy()
+        admin_config['database'] = 'postgres'
+        
+        conn = psycopg2.connect(**admin_config)
+        conn.autocommit = True
+        
+        with conn.cursor() as cursor:
+            # Check if database exists
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+            exists = cursor.fetchone()
+            
+            if not exists:
+                logger.info(f"Creating database '{db_name}'...")
+                cursor.execute(f'CREATE DATABASE "{db_name}"')
+                logger.info(f"Database '{db_name}' created successfully")
+            else:
+                logger.info(f"Database '{db_name}' already exists")
+                
+        conn.close()
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to ensure database exists: {e}")
+        return False
 
 def client_db():
     """Return connection to client database (same PostgreSQL database)"""

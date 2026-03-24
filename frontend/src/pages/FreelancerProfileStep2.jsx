@@ -77,6 +77,25 @@ export default function FreelancerProfileStep2() {
       setError("Please complete Step 1 first.");
       return;
     }
+
+    // Validate required pricing fields based on type
+    if (pricing.type === "HOURLY" && (!pricing.hourlyRate || parseFloat(pricing.hourlyRate) <= 0)) {
+      setError("Hourly rate is required and must be greater than 0");
+      return;
+    }
+    if (pricing.type === "PER_PERSON" && (!pricing.perPersonRate || parseFloat(pricing.perPersonRate) <= 0)) {
+      setError("Per person rate is required and must be greater than 0");
+      return;
+    }
+    if (pricing.type === "PROJECT" && (!pricing.projectPrice || parseFloat(pricing.projectPrice) <= 0)) {
+      setError("Starting price is required and must be greater than 0");
+      return;
+    }
+    if (pricing.type === "PROJECT" && !pricing.description) {
+      setError("Work description is required for project categories");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
@@ -96,12 +115,12 @@ export default function FreelancerProfileStep2() {
       };
 
       if (pricing.type === "HOURLY") {
-        payload.hourly_rate = pricing.hourlyRate ? parseFloat(pricing.hourlyRate) : null;
+        payload.hourly_rate = parseFloat(pricing.hourlyRate);
         payload.overtime_rate_per_hour = pricing.hasOvertime && pricing.overtimeRate ? parseFloat(pricing.overtimeRate) : null;
       } else if (pricing.type === "PER_PERSON") {
-        payload.per_person_rate = pricing.perPersonRate ? parseFloat(pricing.perPersonRate) : null;
+        payload.per_person_rate = parseFloat(pricing.perPersonRate);
       } else if (pricing.type === "PROJECT") {
-        payload.starting_price = pricing.projectPrice ? parseFloat(pricing.projectPrice) : null;
+        payload.starting_price = parseFloat(pricing.projectPrice);
         payload.work_description = pricing.description || "Project work";
         payload.services_included = pricing.services || "";
       }
@@ -142,8 +161,15 @@ export default function FreelancerProfileStep2() {
         return (
           <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
             <label>
-              <span style={{ fontWeight: 600, color: '#1e293b' }}>Hourly Rate (₹/hour)</span>
-              <input type="number" min="0" value={pricing.hourlyRate} onChange={onPricingField("hourlyRate")} />
+              <span style={{ fontWeight: 600, color: '#1e293b' }}>Hourly Rate (₹/hour) *</span>
+              <input 
+                type="number" 
+                min="0" 
+                value={pricing.hourlyRate} 
+                onChange={onPricingField("hourlyRate")}
+                placeholder="e.g., 200"
+                required
+              />
             </label>
             <label style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', cursor: 'pointer', marginTop: '6px' }}>
               <input type="checkbox" checked={pricing.hasOvertime} onChange={onPricingField("hasOvertime")} style={{ width: 'auto', height: 'auto', margin: 0 }} />
@@ -152,7 +178,7 @@ export default function FreelancerProfileStep2() {
             {pricing.hasOvertime && (
               <label className="fade-in" style={{ marginTop: '8px' }}>
                 <span style={{ fontWeight: 600, color: '#1e293b' }}>Overtime Rate (₹/hour)</span>
-                <input type="number" min="0" value={pricing.overtimeRate} onChange={onPricingField("overtimeRate")} />
+                <input type="number" min="0" value={pricing.overtimeRate} onChange={onPricingField("overtimeRate")} placeholder="e.g., 300" />
               </label>
             )}
           </div>
@@ -161,8 +187,15 @@ export default function FreelancerProfileStep2() {
         return (
           <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
             <label>
-              <span style={{ fontWeight: 600, color: '#1e293b' }}>Per Person Rate (₹/person)</span>
-              <input type="number" min="0" value={pricing.perPersonRate} onChange={onPricingField("perPersonRate")} />
+              <span style={{ fontWeight: 600, color: '#1e293b' }}>Per Person Rate (₹/person) *</span>
+              <input 
+                type="number" 
+                min="0" 
+                value={pricing.perPersonRate} 
+                onChange={onPricingField("perPersonRate")}
+                placeholder="e.g., 500"
+                required
+              />
             </label>
           </div>
         );
@@ -176,12 +209,25 @@ export default function FreelancerProfileStep2() {
         return (
           <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
             <label>
-              <span style={{ fontWeight: 600, color: '#1e293b' }}>Starting Project Price (₹)</span>
-              <input type="number" min="0" value={pricing.projectPrice} onChange={onPricingField("projectPrice")} />
+              <span style={{ fontWeight: 600, color: '#1e293b' }}>Starting Project Price (₹) *</span>
+              <input 
+                type="number" 
+                min="0" 
+                value={pricing.projectPrice} 
+                onChange={onPricingField("projectPrice")}
+                placeholder="e.g., 25000"
+                required
+              />
             </label>
             <label>
-              <span style={{ fontWeight: 600, color: '#1e293b' }}>Work Description</span>
-              <textarea rows="3" value={pricing.description} onChange={onPricingField("description")} />
+              <span style={{ fontWeight: 600, color: '#1e293b' }}>Work Description *</span>
+              <textarea 
+                rows="3" 
+                value={pricing.description} 
+                onChange={onPricingField("description")}
+                placeholder="Describe your project services..."
+                required
+              />
             </label>
             <label>
               <span style={{ fontWeight: 600, color: '#1e293b' }}>Services Included</span>
@@ -198,32 +244,35 @@ export default function FreelancerProfileStep2() {
     <ProfileFormLayout step={2}>
       <form className="cp-form cp-slide-in" onSubmit={submitProfile}>
         <label>
-          <span>Title</span>
+          <span>Title *</span>
           <input
             type="text"
             placeholder="e.g. Professional Wedding Photographer / DJ for Events"
             value={form.title}
             onChange={onField("title")}
+            required
           />
         </label>
         
         <label>
-          <span>Skills</span>
+          <span>Skills *</span>
           <input
             type="text"
             placeholder="e.g. Video Editing, Lighting, Drone (comma separated)"
             value={form.skills}
             onChange={onField("skills")}
+            required
           />
         </label>
 
         <label>
-          <span>Bio</span>
+          <span>Bio *</span>
           <textarea
             rows="4"
             placeholder="Write a short bio..."
             value={form.bio}
             onChange={onField("bio")}
+            required
           />
         </label>
 
