@@ -398,19 +398,21 @@ def create_tables():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS project_post (
         id SERIAL PRIMARY KEY,
-        client_id INTEGER,
-        category TEXT,
-        description TEXT,
+        client_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL,
         location TEXT,
-        pincode TEXT,
-        status TEXT DEFAULT 'OPEN',
-        created_at INTEGER
+        budget_type TEXT,
+        description TEXT,
+        status TEXT DEFAULT 'active',
+        created_at INTEGER NOT NULL
     )
     """)
     
-    # Ensure location column exists (for existing databases)
+    # Ensure all required columns exist (for existing databases)
+    _try_add_column(cur, "project_post", "title TEXT NOT NULL DEFAULT ''")
+    _try_add_column(cur, "project_post", "budget_type TEXT")
     _try_add_column(cur, "project_post", "location TEXT")
-    _try_add_column(cur, "project_post", "pincode TEXT")
     cur.execute("""
     CREATE TABLE IF NOT EXISTS project_application (
         id SERIAL PRIMARY KEY,

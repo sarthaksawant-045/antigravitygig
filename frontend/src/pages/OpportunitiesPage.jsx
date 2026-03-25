@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { freelancerService, clientService } from "../services";
+import "./opportunities.css";
 
 // ─── Utility: format budget ────────────────────────────────────────────────
 function fmt(v) {
@@ -31,6 +32,11 @@ function HireRequestCard({ req, onRespond }) {
         </span>
       </div>
       {req.note && <p style={{ marginTop: "0.5rem", color: "#475569", fontSize: "0.9rem" }}>{req.note}</p>}
+      {req.status === "ACCEPTED" && (
+        <p style={{ marginTop: "0.75rem", color: "#16a34a", fontSize: "0.85rem", fontWeight: 600 }}>
+          ✓ Accepted. Awaiting Client payment to begin the gig.
+        </p>
+      )}
       {req.created_at && (
         <p style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "0.25rem" }}>
           Received: {new Date(req.created_at * 1000).toLocaleDateString()}
@@ -102,25 +108,28 @@ export default function OpportunitiesPage() {
       .finally(() => setLoadingHire(false));
   }, [user?.id]);
 
-  // Load available projects
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [budgetFilter, setBudgetFilter] = useState("");
+
+  // Load available projects - dynamic based on search
   useEffect(() => {
-    setLoadingProjects(true);
-    setProjectError("");
-    clientService.getProjects(null) // null gets all active projects (no client_id filter)
-      .then(res => {
-        // getProjects(null) sends /client/projects with no client_id which returns all active
-        setProjects(res.projects || []);
-      })
-      .catch(() => {
-        // Fallback: try /projects/all
-        fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/projects/all`)
-          .then(r => r.json())
-          .then(data => setProjects(data.projects || []))
-          .catch(() => setProjectError("Could not load available projects."))
-          .finally(() => setLoadingProjects(false));
-      })
-      .finally(() => setLoadingProjects(false));
-  }, []);
+    // Debounce search to avoid blowing up the API on every keystroke
+    const timer = setTimeout(() => {
+      setLoadingProjects(true);
+      setProjectError("");
+      
+      const fetchPromise = search.trim() 
+        ? clientService.searchProjects(search.trim())
+        : clientService.getAllProjects();
+
+      fetchPromise
+        .then(res => setProjects(res.projects || []))
+        .catch(() => setProjectError("Could not load available projects."))
+        .finally(() => setLoadingProjects(false));
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const handleRespond = useCallback(async (requestId, action) => {
     if (!user?.id) return;
@@ -134,14 +143,18 @@ export default function OpportunitiesPage() {
     }
   }, [user?.id]);
 
+  // Client-side filtering ONLY for hire requests
   const filteredHire = hireRequests.filter(r =>
     (r.job_title || "").toLowerCase().includes(search.toLowerCase()) ||
     (r.client_name || "").toLowerCase().includes(search.toLowerCase())
   );
-  const filteredProjects = projects.filter(p =>
-    (p.title || p.category || "").toLowerCase().includes(search.toLowerCase()) ||
-    (p.description || "").toLowerCase().includes(search.toLowerCase())
-  );
+  
+  // Projects are already server-filtered by search, now apply optional UI filters
+  const filteredProjects = projects.filter(p => {
+    if (categoryFilter && p.category !== categoryFilter) return false;
+    if (budgetFilter && p.budget_type !== budgetFilter) return false;
+    return true;
+  });
 
   return (
     <main style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 1rem" }}>
@@ -173,12 +186,37 @@ export default function OpportunitiesPage() {
         ))}
       </div>
 
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder={`Search ${tab === "hireRequests" ? "hire requests" : "projects"}…`}
-        style={{ width: "100%", padding: "10px 16px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "1.25rem", fontSize: "0.95rem", boxSizing: "border-box" }}
-      />
+      <div style={{ display: "flex", gap: "10px", marginBottom: "1.25rem", flexWrap: "wrap" }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={`Search ${tab === "hireRequests" ? "hire requests" : "projects"}…`}
+          style={{ flex: "1 1 300px", padding: "10px 16px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", boxSizing: "border-box" }}
+        />
+        {tab === "projects" && (
+          <>
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", background: "white", cursor: "pointer" }}
+            >
+              <option value="">All Categories</option>
+              {["Photographer","Videographer","DJ","Singer","Dancer","Anchor","Makeup Artist","Mehendi Artist","Decorator","Wedding Planner","Choreographer","Band / Live Music","Magician / Entertainer","Artist","Event Organizer"].map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              value={budgetFilter}
+              onChange={e => setBudgetFilter(e.target.value)}
+              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", background: "white", cursor: "pointer" }}
+            >
+              <option value="">All Budgets</option>
+              <option value="hourly">Hourly Rate</option>
+              <option value="fixed">Fixed Price</option>
+            </select>
+          </>
+        )}
+      </div>
 
       {tab === "hireRequests" && (
         <section>

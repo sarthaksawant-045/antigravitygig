@@ -79,4 +79,20 @@ export const freelancerService = {
   getFreelancerPackages: async (freelancerId) => {
     return await api.get(`/freelancer/${freelancerId}/packages`);
   },
+
+  // ==========================================
+  // PHASE 4: EXECUTION & REVIEWS
+  // ==========================================
+
+  completeWork: async (freelancerId, hireRequestId, note) => {
+    return await api.post('/freelancer/hire/complete', {
+      freelancer_id: freelancerId,
+      hire_request_id: hireRequestId,
+      note: note
+    });
+  },
+
+  getReviews: async (freelancerId) => {
+    return await api.get(`/freelancer/reviews?freelancer_id=${freelancerId}`);
+  },
 };

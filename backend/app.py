@@ -168,6 +168,41 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}})
 
 # ============================================================
+# VERBOSE LOGGING FOR DEBUGGING
+# ============================================================
+@app.before_request
+def log_request_info():
+    if request.path.startswith('/static') or request.path == '/favicon.ico':
+        return
+    logger.info(f"\n{'='*20} INCOMING REQUEST {'='*20}")
+    logger.info(f"{request.method} {request.path}")
+    if request.is_json:
+        try:
+            logger.info(f"Payload: {request.get_json(silent=True)}")
+        except Exception:
+            pass
+    elif request.form:
+        logger.info(f"Form Data: {dict(request.form)}")
+    logger.info(f"{'='*58}")
+
+@app.after_request
+def log_response_info(response):
+    if request.path.startswith('/static') or request.path == '/favicon.ico':
+        return response
+    logger.info(f"\n{'='*20} OUTGOING RESPONSE {'='*19}")
+    logger.info(f"Status: {response.status}")
+    if response.is_json:
+        try:
+            resp_str = str(response.get_json())
+            if len(resp_str) > 1000:
+                resp_str = resp_str[:1000] + " ... [TRUNCATED]"
+            logger.info(f"Response: {resp_str}")
+        except Exception:
+            pass
+    logger.info(f"{'='*58}\n")
+    return response
+
+# ============================================================
 # GLOBAL ERROR HANDLERS - ENSURE JSON RESPONSES
 # ============================================================
 
@@ -2569,17 +2604,17 @@ def client_hire():
     note = str(d.get("note", "")).strip()
     
     # Extract and validate date/time slots
-    event_date = d.get("event_date", "").strip()
-    start_time = d.get("start_time", "").strip()
-    end_time = d.get("end_time", "").strip()
+    event_date = str(d.get("event_date") or "").strip()
+    start_time = str(d.get("start_time") or "").strip()
+    end_time = str(d.get("end_time") or "").strip()
     
     # Process venue data
     venue_choice = d.get("venue_source", "custom")  # Default to custom for backward compatibility
     custom_venue_data = {
-        "event_address": d.get("event_address", "").strip(),
-        "event_city": d.get("event_city", "").strip(),
-        "event_pincode": d.get("event_pincode", "").strip(),
-        "event_landmark": d.get("event_landmark", "").strip()
+        "event_address": str(d.get("event_address") or "").strip(),
+        "event_city": str(d.get("event_city") or "").strip(),
+        "event_pincode": str(d.get("event_pincode") or "").strip(),
+        "event_landmark": str(d.get("event_landmark") or "").strip()
     } if venue_choice == "custom" else None
     
     # Prepare venue data
@@ -2685,7 +2720,39 @@ def client_hire():
             conn.close()
             return jsonify({"success": False, "msg": "Freelancer hourly_rate not configured"}), 400
         contract_type = "HOURLY"
-        proposed_budget = proposed_budget or 0
+        
+        # Calculate total cost from hours × hourly rate
+        try:
+            from datetime import datetime as dt
+            # Parse times - support both HH:MM and HH:MM AM/PM formats
+            for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p"):
+                try:
+                    st = dt.strptime(start_time, fmt)
+                    break
+                except ValueError:
+                    st = None
+            for fmt in ("%H:%M", "%I:%M %p", "%I:%M%p"):
+                try:
+                    et = dt.strptime(end_time, fmt)
+                    break
+                except ValueError:
+                    et = None
+            if st and et:
+                diff_seconds = (et - st).total_seconds()
+                if diff_seconds <= 0:
+                    diff_seconds += 24 * 3600  # handle overnight
+                total_hours = diff_seconds / 3600.0
+                if total_hours <= 0:
+                    conn.close()
+                    return jsonify({"success": False, "msg": "Invalid hours duration (0 or negative)"}), 400
+                proposed_budget = round(total_hours * float(fp_hourly_rate), 2)
+                client_budget = proposed_budget
+            else:
+                conn.close()
+                return jsonify({"success": False, "msg": "Could not parse start/end time format. Expected HH:MM"}), 400
+        except Exception as e:
+            conn.close()
+            return jsonify({"success": False, "msg": f"Error calculating hourly budget: {str(e)}"}), 400
 
     elif pricing_type == PRICING_TYPE_PER_PERSON:
         # Only require event_date for PER_PERSON
@@ -2923,7 +2990,8 @@ def freelancer_hire_inbox():
                contract_type, contract_hourly_rate, contract_overtime_rate, 
                weekly_limit, max_daily_hours, event_base_fee, event_included_hours, 
                event_overtime_rate, advance_paid,
-               final_agreed_amount, counter_note, negotiation_status
+               final_agreed_amount, counter_note, negotiation_status,
+               job_title, payment_status, event_status, payout_status
         FROM hire_request
         WHERE freelancer_id=%s
         ORDER BY created_at DESC
@@ -2938,7 +3006,8 @@ def freelancer_hire_inbox():
     out = []
     for r in rows:
         if isinstance(r, dict):
-            cid = int(r.get("client_id"))
+            cid_val = r.get("client_id")
+            cid = int(cid_val) if cid_val is not None else 0
             rid = r.get("id")
             budget = r.get("proposed_budget")
             note = r.get("note")
@@ -2956,6 +3025,10 @@ def freelancer_hire_inbox():
             final_amount = r.get("final_agreed_amount")
             counter_note = r.get("counter_note")
             negotiation_status = r.get("negotiation_status")
+            job_title_val = r.get("job_title")
+            payment_status = r.get("payment_status")
+            event_status = r.get("event_status")
+            payout_status = r.get("payout_status")
         else:
             cid = int(r[1])
             rid = r[0]
@@ -2975,6 +3048,10 @@ def freelancer_hire_inbox():
             final_amount = r[15] if len(r) > 15 else None
             counter_note = r[16] if len(r) > 16 else None
             negotiation_status = r[17] if len(r) > 17 else None
+            job_title_val = r[18] if len(r) > 18 else None
+            payment_status = r[19] if len(r) > 19 else None
+            event_status = r[20] if len(r) > 20 else None
+            payout_status = r[21] if len(r) > 21 else None
 
         client_cur.execute("SELECT name, email FROM client WHERE id=%s", (cid,))
         c = client_cur.fetchone()
@@ -2994,6 +3071,7 @@ def freelancer_hire_inbox():
             "client_id": cid,
             "client_name": cname,
             "client_email": cemail,
+            "job_title": job_title_val,
             "proposed_budget": budget,
             "note": note,
             "status": status,
@@ -3010,6 +3088,9 @@ def freelancer_hire_inbox():
             "final_agreed_amount": final_amount,
             "counter_note": counter_note,
             "negotiation_status": negotiation_status,
+            "payment_status": payment_status,
+            "event_status": event_status,
+            "payout_status": payout_status,
         })
 
     client_conn.close()
@@ -5582,89 +5663,9 @@ def freelancer_subscription_status():
 # ============================================================
 # PROJECT POSTING (Optional Hiring Flow)
 # ============================================================
+# NOTE: /client/project POST, /client/projects GET, and /projects/all GET
+# are defined later in the file (around line 6685+). Do NOT duplicate here.
 
-@app.route("/client/projects/create", methods=["POST"])
-def client_projects_create():
-    d = get_json()
-    missing = require_fields(d, ["client_id", "category", "description", "location", "pincode"])
-    if missing:
-        return jsonify({"success": False, "msg": "Missing fields"}), 400
-    
-    try:
-        client_id = int(d["client_id"])
-        category = str(d["category"]).strip()
-        description = str(d["description"]).strip()
-        location = str(d["location"]).strip()
-        pincode = str(d["pincode"]).strip()
-        
-    except Exception:
-        return jsonify({"success": False, "msg": "Invalid payload"}), 400
-    
-    conn = freelancer_db()
-    try:
-        cur = get_dict_cursor(conn)
-        cur.execute("""
-            INSERT INTO project_post (client_id, category, description, location, pincode, status, created_at)
-            VALUES (%s, %s, %s, %s, %s, 'OPEN', %s) RETURNING id
-        """, (client_id, category, description, location, pincode, now_ts()))
-
-        proj_row = cur.fetchone()
-        project_id = proj_row["id"] if isinstance(proj_row, dict) else proj_row[0]
-        conn.commit()
-
-        return jsonify({
-            "success": True,
-            "msg": "Project posted successfully",
-            "project_id": project_id,
-            "status": "OPEN"
-        })
-        
-    except psycopg2.Error as e:
-        print(f"Database error in project creation: {type(e).__name__}: {str(e)}")
-        if conn:
-            conn.rollback()
-        return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
-    except Exception as e:
-        print(f"Unexpected error in project creation: {type(e).__name__}: {str(e)}")
-        if conn:
-            conn.rollback()
-        return jsonify({"success": False, "msg": f"Server error: {str(e)}"}), 500
-    finally:
-        conn.close()
-
-
-@app.route("/client/projects", methods=["GET"])
-def client_projects_list():
-    client_id = request.args.get("client_id", "")
-    try:
-        cid = int(client_id)
-    except Exception:
-        return jsonify({"success": False, "msg": "client_id required"}), 400
-    conn = freelancer_db()
-    from psycopg2.extras import RealDictCursor
-    try:
-        cur = get_dict_cursor(conn)
-        cur.execute("""
-            SELECT id, category, description, location, pincode, status, created_at
-            FROM project_post
-            WHERE client_id=%s
-            ORDER BY created_at DESC
-        """, (cid,))
-        rows = cur.fetchall()
-        projects = []
-        for r in rows:
-            projects.append({
-                "project_id": r["id"],
-                "category": r["category"],
-                "description": r["description"],
-                "location": r["location"],
-                "pincode": r["pincode"],
-                "status": r["status"],
-                "created_at": r["created_at"],
-            })
-        return jsonify({"success": True, "projects": projects})
-    finally:
-        conn.close()
 
 @app.route("/client/projects/applicants", methods=["GET"])
 def client_projects_applicants():
@@ -6650,6 +6651,155 @@ def call_incoming():
         return jsonify({"success": False, "msg": str(e)}), 500
 
 
+# ============================================================
+# CLIENT HIRE STATUS VIEW
+# ============================================================
+
+@app.route("/client/hire/requests", methods=["GET"])
+def client_hire_requests():
+    """Get all hire requests sent by a client with freelancer details."""
+    client_id = request.args.get("client_id")
+    if not client_id:
+        return jsonify({"success": False, "msg": "client_id required"}), 400
+    try:
+        client_id = int(client_id)
+    except ValueError:
+        return jsonify({"success": False, "msg": "Invalid client_id"}), 400
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        cur.execute("""
+            SELECT id, freelancer_id, job_title, proposed_budget, note, status,
+                   created_at, contract_type, final_agreed_amount, negotiation_status,
+                   payment_status, event_status, payout_status
+            FROM hire_request
+            WHERE client_id=%s
+            ORDER BY created_at DESC
+        """, (client_id,))
+        rows = cur.fetchall()
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+    conn.close()
+
+    # Enrich with freelancer name/category
+    f_conn = freelancer_db()
+    f_cur = get_dict_cursor(f_conn)
+    out = []
+    for r in rows:
+        if isinstance(r, dict):
+            fid = r.get("freelancer_id")
+            rid = r.get("id")
+            job_title = r.get("job_title")
+            budget = r.get("proposed_budget")
+            note = r.get("note")
+            status = r.get("status")
+            created_at = r.get("created_at")
+            contract_type = r.get("contract_type")
+            final_amount = r.get("final_agreed_amount")
+            neg_status = r.get("negotiation_status")
+            payment_status = r.get("payment_status")
+            event_status = r.get("event_status")
+            payout_status = r.get("payout_status")
+        else:
+            fid = r[1]
+            rid = r[0]
+            job_title = r[2]
+            budget = r[3]
+            note = r[4]
+            status = r[5]
+            created_at = r[6]
+            contract_type = r[7]
+            final_amount = r[8] if len(r) > 8 else None
+            neg_status = r[9] if len(r) > 9 else None
+            payment_status = r[10] if len(r) > 10 else None
+            event_status = r[11] if len(r) > 11 else None
+            payout_status = r[12] if len(r) > 12 else None
+
+        # Get freelancer name and category
+        fname = "Unknown"
+        fcategory = ""
+        try:
+            f_cur.execute("""
+                SELECT f.name, fp.category
+                FROM freelancer f
+                LEFT JOIN freelancer_profile fp ON f.id = fp.freelancer_id
+                WHERE f.id=%s
+            """, (int(fid) if fid is not None else 0,))
+            fdata = f_cur.fetchone()
+            if fdata:
+                if isinstance(fdata, dict):
+                    fname = fdata.get("name", "Unknown")
+                    fcategory = fdata.get("category", "")
+                else:
+                    fname = fdata[0] or "Unknown"
+                    fcategory = fdata[1] or ""
+        except Exception:
+            pass
+
+        out.append({
+            "request_id": rid,
+            "freelancer_id": fid,
+            "freelancer_name": fname,
+            "freelancer_category": fcategory,
+            "job_title": job_title,
+            "proposed_budget": budget,
+            "note": note,
+            "status": status,
+            "created_at": created_at,
+            "contract_type": contract_type,
+            "final_agreed_amount": final_amount,
+            "negotiation_status": neg_status,
+            "payment_status": payment_status,
+            "event_status": event_status,
+            "payout_status": payout_status,
+        })
+    f_conn.close()
+    return jsonify({"success": True, "requests": out})
+
+
+# ============================================================
+# PROJECT SEARCH
+# ============================================================
+
+@app.route("/projects/search", methods=["GET"])
+def projects_search():
+    """Search active projects by keyword across title, category, description."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify({"success": True, "projects": []})
+
+    conn = client_db()
+    cur = get_dict_cursor(conn)
+    try:
+        search_pattern = f"%{q}%"
+        cur.execute("""
+            SELECT * FROM project_post
+            WHERE status='active'
+              AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
+            ORDER BY created_at DESC
+        """, (search_pattern, search_pattern, search_pattern))
+        rows = cur.fetchall()
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+    conn.close()
+    out = []
+    for r in rows:
+        out.append({
+            "id": r.get("id") if isinstance(r, dict) else r[0],
+            "client_id": r.get("client_id") if isinstance(r, dict) else r[1],
+            "title": r.get("title") if isinstance(r, dict) else r[2],
+            "category": r.get("category") if isinstance(r, dict) else r[3],
+            "location": r.get("location") if isinstance(r, dict) else r[4],
+            "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+            "description": r.get("description") if isinstance(r, dict) else r[6],
+            "status": r.get("status") if isinstance(r, dict) else r[7],
+            "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
+        })
+    return jsonify({"success": True, "projects": out})
+
 
 # ============================================================
 # PROJECT POSTING – CLIENT
@@ -6710,9 +6860,10 @@ def client_post_project():
         project_id = row["id"] if isinstance(row, dict) else row[0]
         conn.commit()
     except Exception as e:
+        print(f"Error in client_post_project: {str(e)}")
         conn.rollback()
         conn.close()
-        return jsonify({"success": False, "msg": "Database error"}), 500
+        return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
     conn.close()
     return jsonify({"success": True, "project_id": project_id})
 
@@ -6860,6 +7011,276 @@ def freelancer_notifications_by_id():
                 "createdAt": r.get("created_at"),
             })
     return jsonify({"success": True, "notifications": out})
+
+
+# ============================================================
+# PHASE 4: PAYMENTS, EXECUTION AND REVIEWS
+# ============================================================
+
+import razorpay
+import hmac
+import hashlib
+
+RAZORPAY_KEY_ID = 'rzp_test_SUJ9gz60CfdMWX'
+RAZORPAY_KEY_SECRET = 'KiHXGap8Xly3BH7YRTi6Da0D'
+
+try:
+    razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+except Exception as e:
+    logger.warning("Could not initialize Razorpay client.")
+
+@app.route("/payment/create-order", methods=["POST"])
+def payment_create_order():
+    """Create a Razorpay order before payment."""
+    d = get_json()
+    missing = require_fields(d, ["hire_request_id"])
+    if missing:
+        return jsonify({"success": False, "msg": f"Missing fields: {missing}"}), 400
+
+    hire_request_id = int(d["hire_request_id"])
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        cur.execute("SELECT proposed_budget, final_agreed_amount FROM hire_request WHERE id=%s", (hire_request_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "msg": "Hire request not found"}), 404
+        
+        # Use final agreed amount if it exists, else use proposed budget
+        amount = row.get("final_agreed_amount") if isinstance(row, dict) else row[1]
+        if not amount:
+            amount = row.get("proposed_budget") if isinstance(row, dict) else row[0]
+            
+        amount_paise = int(float(amount) * 100)
+        
+        # Create Razorpay Order
+        options = {
+            "amount": amount_paise,
+            "currency": "INR",
+            "receipt": f"receipt_hire_{hire_request_id}"
+        }
+        order = razorpay_client.order.create(data=options)
+        
+        # Save to DB
+        cur.execute(
+            """INSERT INTO payment_records (hire_id, razorpay_order_id, amount, status, created_at)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (hire_request_id, order['id'], amount, 'PENDING', now_ts())
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "msg": f"Payment error: {str(e)}"}), 500
+    
+    conn.close()
+    return jsonify({
+        "success": True, 
+        "order_id": order['id'],
+        "amount": order['amount'],
+        "currency": order['currency'],
+        "key_id": RAZORPAY_KEY_ID
+    })
+
+
+@app.route("/payment/verify", methods=["POST"])
+def payment_verify():
+    """Verify Razorpay payment signature after successful client transaction."""
+    d = get_json()
+    missing = require_fields(d, ["hire_request_id", "razorpay_order_id", "razorpay_payment_id", "razorpay_signature"])
+    if missing:
+        return jsonify({"success": False, "msg": f"Missing fields: {missing}"}), 400
+
+    order_id = str(d["razorpay_order_id"])
+    payment_id = str(d["razorpay_payment_id"])
+    signature = str(d["razorpay_signature"])
+    hire_id = int(d["hire_request_id"])
+
+    # Verify Signature
+    body = order_id + "|" + payment_id
+    expected_signature = hmac.new(
+        bytes(RAZORPAY_KEY_SECRET, 'utf-8'),
+        bytes(body, 'utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+
+    if expected_signature == signature:
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        try:
+            # Update payment record
+            cur.execute(
+                """UPDATE payment_records 
+                   SET status = 'SUCCESS', razorpay_payment_id = %s, razorpay_signature = %s 
+                   WHERE razorpay_order_id = %s""",
+                (payment_id, signature, order_id)
+            )
+            # Update hire request
+            cur.execute("UPDATE hire_request SET payment_status = 'paid' WHERE id = %s", (hire_id,))
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            return jsonify({"success": False, "msg": "Database error"}), 500
+        conn.close()
+        return jsonify({"success": True, "msg": "Payment verified successfully"})
+    else:
+        return jsonify({"success": False, "msg": "Invalid signature"}), 400
+
+
+@app.route("/freelancer/hire/complete", methods=["POST"])
+def freelancer_hire_complete():
+    """Freelancer explicitly marks an active job as complete and submits proof."""
+    d = get_json()
+    missing = require_fields(d, ["freelancer_id", "hire_request_id"])
+    if missing:
+        return jsonify({"success": False, "msg": f"Missing: {missing}"}), 400
+
+    fid = int(d["freelancer_id"])
+    hid = int(d["hire_request_id"])
+    note = str(d.get("note", ""))
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        cur.execute(
+            """UPDATE hire_request 
+               SET event_status = 'completed', completion_note = %s, completed_at = %s 
+               WHERE id = %s AND freelancer_id = %s AND status = 'ACCEPTED'""",
+            (note, now_ts(), hid, fid)
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "msg": "Cannot complete this project. Ensure you are hired for it."}), 400
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "msg": "Database error"}), 500
+    conn.close()
+    return jsonify({"success": True, "msg": "Work marked as completed successfully."})
+
+
+@app.route("/client/hire/approve", methods=["POST"])
+def client_hire_approve():
+    """Client approves the completed work, staging it for payout."""
+    d = get_json()
+    missing = require_fields(d, ["client_id", "hire_request_id"])
+    if missing:
+        return jsonify({"success": False, "msg": f"Missing: {missing}"}), 400
+
+    cid = int(d["client_id"])
+    hid = int(d["hire_request_id"])
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        cur.execute(
+            """UPDATE hire_request 
+               SET payout_status = 'processing' 
+               WHERE id = %s AND client_id = %s AND event_status = 'completed'""",
+            (hid, cid)
+        )
+        if cur.rowcount == 0:
+            return jsonify({"success": False, "msg": "Cannot approve. Ensure work was marked completed."}), 400
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "msg": "Database error"}), 500
+    conn.close()
+    return jsonify({"success": True, "msg": "Work approved."})
+
+
+@app.route("/client/hire/review", methods=["POST"])
+def client_hire_review():
+    """Client leaves a review containing a 1-5 rating, concluding the contract entirely."""
+    d = get_json()
+    missing = require_fields(d, ["client_id", "hire_request_id", "rating"])
+    if missing:
+        return jsonify({"success": False, "msg": f"Missing: {missing}"}), 400
+
+    cid = int(d["client_id"])
+    hid = int(d["hire_request_id"])
+    rating = float(d["rating"])
+    review_text = str(d.get("review_text", ""))
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        # Get freelancer id for this hire
+        cur.execute("SELECT freelancer_id FROM hire_request WHERE id = %s AND client_id = %s", (hid, cid))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"success": False, "msg": "Hire request not found"}), 404
+            
+        fid = row.get("freelancer_id") if isinstance(row, dict) else row[0]
+
+        # Insert Review (Ignore if duplicate rating for same hire)
+        cur.execute(
+            """INSERT INTO review (hire_request_id, client_id, freelancer_id, rating, review_text, created_at)
+               VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (hire_request_id) DO NOTHING""",
+            (hid, cid, fid, rating, review_text, now_ts())
+        )
+        
+        # Finalize project status
+        cur.execute("UPDATE hire_request SET status = 'COMPLETED' WHERE id = %s", (hid,))
+
+        # Update absolute averages on freelancer_profile (simple rolling average simulation)
+        cur.execute(
+            """UPDATE freelancer_profile 
+               SET total_projects = COALESCE(total_projects, 0) + 1,
+                   total_rating_sum = COALESCE(total_rating_sum, 0) + %s
+               WHERE freelancer_id = %s""",
+            (rating, fid)
+        )
+        cur.execute(
+            """UPDATE freelancer_profile 
+               SET rating = ROUND((total_rating_sum::numeric / total_projects::numeric), 1)
+               WHERE freelancer_id = %s AND total_projects > 0""",
+            (fid,)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "msg": "Database error"}), 500
+    conn.close()
+    return jsonify({"success": True, "msg": "Review submitted successfully!"})
+
+
+@app.route("/freelancer/reviews", methods=["GET"])
+def freelancer_reviews():
+    """Fetch all reviews for a freelancer."""
+    fid = request.args.get("freelancer_id")
+    if not fid:
+        return jsonify({"success": False, "msg": "missing freelancer_id"}), 400
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    try:
+        cur.execute(
+            """SELECT r.rating, r.review_text, r.created_at, c.name as client_name 
+               FROM review r 
+               LEFT JOIN client c ON r.client_id = c.id 
+               WHERE r.freelancer_id = %s ORDER BY r.created_at DESC""",
+            (int(fid),)
+        )
+        rows = cur.fetchall()
+        
+        out = []
+        for r in rows:
+            out.append({
+                "rating": r.get("rating") if isinstance(r, dict) else r[0],
+                "review_text": r.get("review_text") if isinstance(r, dict) else r[1],
+                "created_at": r.get("created_at") if isinstance(r, dict) else r[2],
+                "client_name": r.get("client_name") if isinstance(r, dict) else r[3],
+            })
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "msg": "Database errors"}), 500
+    conn.close()
+    return jsonify({"success": True, "reviews": out})
 
 
 if __name__ == "__main__":

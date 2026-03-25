@@ -92,34 +92,30 @@ export default function ClientProfile() {
   const cancel = () => setDraft(original);
 
   const rating = 4.8;
-  const [stats, setStats] = useState({ posted: 0, active: 0, messages: 0 });
+  const [stats, setStats] = useState({ posted: 0, active: 0, hiresSent: 0 });
 
-  const computeStats = () => {
-    try {
-      const pRaw = localStorage.getItem("gb_projects");
-      const projs = pRaw ? JSON.parse(pRaw) : [];
-      const posted = projs.length;
-      const active = projs.filter((p) => p.status === "active").length;
-      const mRaw = localStorage.getItem("gb_messages");
-      const msgs = mRaw ? JSON.parse(mRaw) : [];
-      setStats({ posted, active, messages: msgs.length });
-    } catch {
-      setStats({ posted: 0, active: 0, messages: 0 });
-    }
-  };
   useEffect(() => {
-    computeStats();
-    const onStorage = () => computeStats();
-    const onMsg = () => computeStats();
-    const onProj = () => computeStats();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("gb:messages", onMsg);
-    window.addEventListener("gb:projects", onProj);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("gb:messages", onMsg);
-      window.removeEventListener("gb:projects", onProj);
-    };
+    const userData = JSON.parse(localStorage.getItem("gb_user_data") || "{}");
+    const clientId = userData.id;
+    if (!clientId) return;
+
+    // Fetch real project stats
+    clientService.getProjects(clientId)
+      .then(res => {
+        const projs = res.projects || [];
+        const posted = projs.length;
+        const active = projs.filter(p => p.status === "active").length;
+        setStats(prev => ({ ...prev, posted, active }));
+      })
+      .catch(() => {});
+
+    // Fetch real hire request count
+    clientService.getHireRequests(clientId)
+      .then(res => {
+        const reqs = res.requests || [];
+        setStats(prev => ({ ...prev, hiresSent: reqs.length }));
+      })
+      .catch(() => {});
   }, []);
   const since = localStorage.getItem("client_profile_member_since") || (() => {
     const m = new Date();
@@ -259,8 +255,8 @@ export default function ClientProfile() {
                 <div className="clientp-trend">+2</div>
               </div>
               <div className="clientp-stat clientp-stat-amber">
-                <div className="clientp-stat-num">{stats.messages}</div>
-                <div className="clientp-stat-label">Messages</div>
+                <div className="clientp-stat-num">{stats.hiresSent}</div>
+                <div className="clientp-stat-label">Hires Sent</div>
                 <div className="clientp-trend">+12</div>
               </div>
             </div>

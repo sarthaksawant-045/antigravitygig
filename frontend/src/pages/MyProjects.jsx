@@ -110,8 +110,16 @@ export default function MyProjects() {
                   <span className="deadline">📅 {project.created_at ? new Date(project.created_at * 1000).toLocaleDateString() : ""}</span>
                 </div>
 
-                <div className="card-footer">
-                  <span className="status-text pending">⏳ Awaiting Applications</span>
+                <div className="card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
+                  <span className={`status-text ${project.status === "ASSIGNED" ? "active" : "pending"}`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                    {project.status === "ASSIGNED" ? "✅ Artist Hired" : "⏳ Awaiting Applications"}
+                  </span>
+                  <button 
+                    style={{ background: '#2563eb', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => navigate(`/project/${project.id}/applicants`)}
+                  >
+                    View Applicants
+                  </button>
                 </div>
               </div>
             );

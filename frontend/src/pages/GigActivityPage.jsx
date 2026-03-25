@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import GigActivityCard from '../components/GigActivityCard';
@@ -7,78 +7,58 @@ import MonthlyStatsSection from '../components/MonthlyStatsSection';
 import AddGigModal from '../components/AddGigModal';
 import EmptyStateCard from '../components/EmptyStateCard';
 import { useAuth } from '../context/AuthContext';
+import { freelancerService } from '../services';
 import './dashboard.css';
 import './gigActivity.css';
-
-const MOCK_GIGS = [
-  {
-    id: 1,
-    title: "Wedding Dance Performance",
-    description: "Choreographed and performed sangeet routine for 20 minutes.",
-    category: "Dance",
-    date: "12 Mar 2026",
-    hours: 4,
-    status: "Completed"
-  },
-  {
-    id: 2,
-    title: "Corporate Event Photography",
-    description: "Covered annual awards ceremony and edited 50 high-res photos.",
-    category: "Photography",
-    date: "10 Mar 2026",
-    hours: 6,
-    status: "Completed"
-  },
-  {
-    id: 3,
-    title: "Live Music Show",
-    description: "Performed 2-hour set with the band at City Music Festival.",
-    category: "Music Band",
-    date: "15 Mar 2026",
-    hours: 5,
-    status: "Upcoming"
-  },
-  {
-    id: 4,
-    title: "DJ Night - Club Fusion",
-    description: "4-hour DJ set for weekend party crowd.",
-    category: "DJ Performance",
-    date: "14 Mar 2026",
-    hours: 4,
-    status: "Ongoing"
-  }
-];
 
 export default function GigActivityPage() {
   const { user } = useAuth();
   const [active, setActive] = useState("projects");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // Use user category for filtering mock data
-  const userCategory = useMemo(() => {
-    return localStorage.getItem('gb_artist_category') || 'Dance';
-  }, []);
+  const [gigs, setGigs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const INITIAL_GIGS = useMemo(() => {
-    const all = [
-      { id: 1, title: "Wedding Dance Performance", description: "Choreographed and performed sangeet routine.", category: "Dance", date: "12 Mar 2026", hours: 4, status: "Completed" },
-      { id: 2, title: "Corporate Event Photography", description: "Covered annual awards ceremony.", category: "Photography", date: "10 Mar 2026", hours: 6, status: "Completed" },
-      { id: 3, title: "Live Music Show", description: "Performed 2-hour set with the band.", category: "Music Band", date: "15 Mar 2026", hours: 5, status: "Upcoming" },
-      { id: 4, title: "DJ Night - Club Fusion", description: "4-hour DJ set for weekend party crowd.", category: "DJ Performance", date: "14 Mar 2026", hours: 4, status: "Ongoing" },
-      { id: 5, title: "Product Shoot - New Collection", description: "Studio shoot for apparel brand.", category: "Photography", date: "08 Mar 2026", hours: 8, status: "Completed" },
-      { id: 6, title: "Sangeet Choreography", description: "Taught dance to 10 family members.", category: "Dance", date: "05 Mar 2026", hours: 12, status: "Completed" },
-      { id: 7, title: "Birthday Party DJ", description: "Handled music for private birthday.", category: "DJ Performance", date: "02 Mar 2026", hours: 3, status: "Completed" }
-    ];
-    // Only return gigs matching user category
-    return all.filter(g => g.category.toLowerCase().includes(userCategory.toLowerCase()) || 
-                          userCategory.toLowerCase().includes(g.category.toLowerCase()));
-  }, [userCategory]);
+  // Fetch real hire data from backend
+  useEffect(() => {
+    if (!user?.id) return;
+    setLoading(true);
+    freelancerService.getHireInbox(user.id)
+      .then(res => {
+        const requests = res.requests || [];
+        // Map hire requests to gig activity format
+        const mapped = requests.map(r => {
+          let status = "Upcoming";
+          if (r.status === "ACCEPTED") status = "Ongoing";
+          else if (r.status === "REJECTED") status = "Cancelled";
+          else if (r.status === "COMPLETED") status = "Completed";
+          else if (r.status === "PENDING") status = "Upcoming";
 
-  const [gigs, setGigs] = useState(INITIAL_GIGS);
+          return {
+            id: r.request_id,
+            freelancer_id: r.freelancer_id,
+            title: r.job_title || `Gig from ${r.client_name || "Client"}`,
+            description: r.note || "No description provided.",
+            category: r.contract_type || "General",
+            date: r.created_at ? new Date(r.created_at * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "",
+            hours: r.max_daily_hours || r.event_included_hours || 0,
+            status,
+            payment_status: r.payment_status,
+            event_status: r.event_status,
+            payout_status: r.payout_status,
+          };
+        });
+        setGigs(mapped);
+      })
+      .catch(err => {
+        console.error("Failed to load gig activity:", err);
+        setGigs([]);
+      })
+      .finally(() => setLoading(false));
+  }, [user?.id]);
 
   const weeklySummary = useMemo(() => {
     const totalGigs = gigs.filter(g => g.status === 'Completed' || g.status === 'Ongoing').length;
-    const totalHours = gigs.reduce((acc, curr) => acc + curr.hours, 0);
+    const totalHours = gigs.reduce((acc, curr) => acc + (curr.hours || 0), 0);
     const categoryBreakdown = gigs.reduce((acc, curr) => {
       acc[curr.category] = (acc[curr.category] || 0) + 1;
       return acc;
@@ -86,16 +66,56 @@ export default function GigActivityPage() {
     return { totalGigs, totalHours, categoryBreakdown };
   }, [gigs]);
 
-  const monthlyStats = {
-    totalGigs: 9,
-    performanceHours: 56,
-    eventsWorked: 7,
-    estimatedEarnings: 45000
-  };
+  const monthlyStats = useMemo(() => {
+    const completed = gigs.filter(g => g.status === 'Completed');
+    return {
+      totalGigs: gigs.length,
+      performanceHours: gigs.reduce((acc, g) => acc + (g.hours || 0), 0),
+      eventsWorked: completed.length,
+      estimatedEarnings: 0, // will be populated when payment tracking is added
+    };
+  }, [gigs]);
 
   const handleAddGig = (newGig) => {
     setGigs(prev => [{ ...newGig, id: Date.now() }, ...prev]);
     setIsModalOpen(false);
+  };
+
+  const handleCompleteGig = async (gigId, freelancerId) => {
+    if (!window.confirm("Are you sure you want to mark this project as completed?")) return;
+    try {
+      setLoading(true);
+      await freelancerService.completeWork(freelancerId, gigId, "Work finished");
+      // Refresh the inbox locally to update status
+      const res = await freelancerService.getHireInbox(user.id);
+      const requests = res.requests || [];
+      const mapped = requests.map(r => {
+        let status = "Upcoming";
+        if (r.status === "ACCEPTED") status = "Ongoing";
+        else if (r.status === "REJECTED") status = "Cancelled";
+        else if (r.status === "COMPLETED") status = "Completed";
+        else if (r.status === "PENDING") status = "Upcoming";
+
+        return {
+          id: r.request_id,
+          freelancer_id: r.freelancer_id,
+          title: r.job_title || `Gig from ${r.client_name || "Client"}`,
+          description: r.note || "No description provided.",
+          category: r.contract_type || "General",
+          date: r.created_at ? new Date(r.created_at * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "",
+          hours: r.max_daily_hours || r.event_included_hours || 0,
+          status,
+          payment_status: r.payment_status,
+          event_status: r.event_status,
+          payout_status: r.payout_status,
+        };
+      });
+      setGigs(mapped);
+    } catch (err) {
+      alert("Error completing gig. Try again later.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -115,9 +135,11 @@ export default function GigActivityPage() {
               </div>
 
               <div className="gig-cards-container">
-                {gigs.length > 0 ? (
+                {loading ? (
+                  <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}>Loading gig activity...</p>
+                ) : gigs.length > 0 ? (
                   gigs.map(gig => (
-                    <GigActivityCard key={gig.id} gig={gig} />
+                    <GigActivityCard key={gig.id} gig={gig} onComplete={handleCompleteGig} />
                   ))
                 ) : (
                   <EmptyStateCard onAdd={() => setIsModalOpen(true)} />

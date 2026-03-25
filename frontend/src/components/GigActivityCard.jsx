@@ -23,9 +23,29 @@ export default function GigActivityCard({ gig }) {
           <span>📅 {gig.date}</span>
         </div>
       </div>
-      <div className="gig-card-right">
-        <div className="gig-hours">{gig.hours}h</div>
-        <span className={`status-badge ${statusClass}`}>{gig.status}</span>
+      <div className="gig-card-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="gig-hours">{gig.hours}h</div>
+          <span className={`status-badge ${statusClass}`}>{gig.status}</span>
+        </div>
+        
+        {gig.payment_status === "paid" && gig.event_status !== "completed" && gig.status !== "Completed" && onComplete && (
+          <button 
+            onClick={() => onComplete(gig.id, gig.freelancer_id)}
+            style={{
+              padding: '0.4rem 0.8rem',
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Mark as Complete
+          </button>
+        )}
       </div>
     </div>
   );

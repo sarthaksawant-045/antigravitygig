@@ -5,20 +5,21 @@ import { clientService } from "../services";
 import "./PostProject.css";
 
 const CATEGORIES = [
-  { id: "photography", name: "Photography", icon: "📷" },
-  { id: "videography", name: "Videography", icon: "🎥" },
+  { id: "photographer", name: "Photographer", icon: "📷" },
+  { id: "videographer", name: "Videographer", icon: "🎥" },
   { id: "dj", name: "DJ", icon: "🎵" },
-  { id: "catering", name: "Catering", icon: "🍽️" },
-  { id: "decoration", name: "Decoration", icon: "🎨" },
-  { id: "music", name: "Music / Band", icon: "🎸" },
-  { id: "dance", name: "Dance & Choreography", icon: "💃" },
-  { id: "anchor", name: "Anchor / Emcee", icon: "🎤" },
-  { id: "web", name: "Web & App Dev", icon: "💻" },
-  { id: "graphic", name: "Graphic Design", icon: "🎨" },
-  { id: "content", name: "Content Writing", icon: "✍️" },
-  { id: "editing", name: "Video Editing", icon: "🎬" },
-  { id: "animation", name: "Animation", icon: "🎭" },
-  { id: "other", name: "Other", icon: "⭐" }
+  { id: "singer", name: "Singer", icon: "🎤" },
+  { id: "dancer", name: "Dancer", icon: "💃" },
+  { id: "anchor", name: "Anchor", icon: "🎙️" },
+  { id: "makeup_artist", name: "Makeup Artist", icon: "💄" },
+  { id: "mehendi_artist", name: "Mehendi Artist", icon: "✋" },
+  { id: "decorator", name: "Decorator", icon: "🎨" },
+  { id: "wedding_planner", name: "Wedding Planner", icon: "💍" },
+  { id: "choreographer", name: "Choreographer", icon: "🩰" },
+  { id: "band_live_music", name: "Band / Live Music", icon: "🎸" },
+  { id: "magician_entertainer", name: "Magician / Entertainer", icon: "🎭" },
+  { id: "artist", name: "Artist", icon: "🖌️" },
+  { id: "event_organizer", name: "Event Organizer", icon: "📋" },
 ];
 
 export default function PostProject() {

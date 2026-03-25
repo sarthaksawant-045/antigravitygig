@@ -30,7 +30,7 @@ def notify_freelancer(freelancer_id, message, title, related_entity_type=None, r
         
         duplicate_count = cur.fetchone()[0]
         if duplicate_count > 0:
-            print(f"⚠️  Duplicate notification prevented for freelancer {freelancer_id}: {title}")
+            print(f"Duplicate notification prevented for freelancer {freelancer_id}: {title}")
             conn.close()
             return True
         
@@ -44,11 +44,11 @@ def notify_freelancer(freelancer_id, message, title, related_entity_type=None, r
         conn.commit()
         conn.close()
         
-        print(f"✅ Notification sent to freelancer {freelancer_id}: {message}")
+        print(f"Notification sent to freelancer {freelancer_id}: {message}")
         return True
         
     except Exception as e:
-        print(f"❌ Error sending notification to freelancer {freelancer_id}: {str(e)}")
+        print(f"Error sending notification to freelancer {freelancer_id}: {str(e)}")
         return False
 
 def notify_client(client_id, message, title, related_entity_type=None, related_entity_id=None):
@@ -56,7 +56,7 @@ def notify_client(client_id, message, title, related_entity_type=None, related_e
     Send notification to client with duplicate prevention and proper error handling
     """
     if not client_id or not message or not title:
-        print(f"❌ Invalid notification parameters: client_id={client_id}, has_message={bool(message)}, has_title={bool(title)}")
+        print(f"Invalid notification parameters: client_id={client_id}, has_message={bool(message)}, has_title={bool(title)}")
         return False
     
     try:
