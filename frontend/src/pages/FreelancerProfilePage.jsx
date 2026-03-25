@@ -7,42 +7,134 @@ import ProfileDetails from "../components/ProfileDetails";
 import CategoryDynamicSection from "../components/CategoryDynamicSection";
 import PortfolioPreview from "../components/PortfolioPreview";
 import EditProfileModal from "../components/EditProfileModal";
+import { useAuth } from "../context/AuthContext.jsx";
 import "./dashboard.css";
 import "./freelancerProfile.css";
 
-const MOCK_PROFILE = {
-  name: "John Smith",
-  email: "john.smith@example.com",
-  phone: "+1 (555) 123-4567",
-  location: "San Francisco, CA",
-  hourlyRate: 85,
-  bio: "Passionate frontend developer with 5+ years of experience building modern web applications. Specialized in React, TypeScript, and creating beautiful user interfaces.",
-  category: "Designer",
-  skills: ["React", "TypeScript", "Node.js", "UI/UX Design", "Figma", "Tailwind CSS"],
-  availability: true,
-  profileImage: null,
-  portfolio: [
-    { id: 1, title: "E-commerce App", description: "A full-stack e-commerce solution", image: "https://images.unsplash.com/photo-1557821552-17105176677c?w=500" },
-    { id: 2, title: "Portfolio Website", description: "Minimalist personal portfolio", image: "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=500" }
-  ],
-  experience: 5,
-  completion: {
-    basicInfo: true,
-    skills: true,
-    verification: false,
-    portfolio: true
-  }
-};
-
 export default function FreelancerProfilePage() {
   const [active, setActive] = useState("profile");
-  const [profile, setProfile] = useState(MOCK_PROFILE);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const { user } = useAuth();
+
+  // Fetch freelancer profile data
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user.isAuthenticated || !user.id) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          // Transform backend data to match frontend structure
+          const transformedProfile = {
+            id: data.id,
+            name: data.name || user.name,
+            email: data.email || user.email,
+            phone: data.phone || data.phone_number || data.contact_number || "Not Available",
+            location: data.location || "",
+            hourlyRate: data.hourly_rate || data.min_budget || 0,
+            price_per_hour: data.hourly_rate || 0,
+            price_per_person: data.per_person_rate || 0,
+            price_per_event: data.fixed_price || data.starting_price || data.min_budget || 0,
+            bio: data.bio || "",
+            category: data.category || "",
+            skills: data.skills ? (typeof data.skills === 'string' ? data.skills.split(',').map(s => s.trim()) : data.skills) : [],
+            availability: data.availability_status === 'AVAILABLE',
+            profileImage: data.profile_image || null,
+            portfolio: [], 
+            experience: data.experience || 0,
+            completion: {
+              basicInfo: !!(data.name && data.email && (data.phone || data.phone_number)),
+              skills: !!(data.skills && data.skills.length > 0),
+              verification: false,
+              portfolio: false
+            }
+          };
+
+          // Debugging logs as requested
+          console.log("Profile Data:", data);
+          console.log("Transformed Profile:", transformedProfile);
+          console.log("Category:", transformedProfile.category);
+          console.log("Phone:", transformedProfile.phone);
+
+          setProfile(transformedProfile);
+        } else {
+          setError(data.msg || "Failed to load profile");
+        }
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setError("Failed to load profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   const handleUpdateProfile = (updatedData) => {
     setProfile(prev => ({ ...prev, ...updatedData }));
     setIsEditModalOpen(false);
   };
+
+  if (loading) {
+    return (
+      <div className="db-layout">
+        <DashboardHeader />
+        <div className="db-shell">
+          <DashboardSidebar active={active} onSelect={setActive} />
+          <main className="db-main profile-page">
+            <div className="loading-spinner">Loading profile...</div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="db-layout">
+        <DashboardHeader />
+        <div className="db-shell">
+          <DashboardSidebar active={active} onSelect={setActive} />
+          <main className="db-main profile-page">
+            <div className="error-message">{error}</div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback profile if API fails
+  const fallbackProfile = {
+    name: user.name || "User",
+    email: user.email || "",
+    phone: "",
+    location: "",
+    hourlyRate: 0,
+    bio: "",
+    category: "",
+    skills: [],
+    availability: false,
+    profileImage: null,
+    portfolio: [],
+    experience: 0,
+    completion: {
+      basicInfo: !!(user.name && user.email),
+      skills: false,
+      verification: false,
+      portfolio: false
+    }
+  };
+
+  const displayProfile = profile || fallbackProfile;
 
   return (
     <div className="db-layout">
@@ -60,26 +152,26 @@ export default function FreelancerProfilePage() {
             </button>
           </div>
 
-          <ProfileCompletionCard completion={profile.completion} />
+          <ProfileCompletionCard completion={displayProfile.completion} />
 
           <div className="profile-content-card">
-            <ProfileHeader profile={profile} />
-            <ProfileDetails profile={profile} onToggleAvailability={(val) => setProfile(prev => ({...prev, availability: val}))} />
+            <ProfileHeader profile={displayProfile} />
+            <ProfileDetails profile={displayProfile} onToggleAvailability={(val) => setProfile(prev => ({...prev, availability: val}))} />
             
             <div className="profile-section-divider" />
             
-            <CategoryDynamicSection profile={profile} />
+            <CategoryDynamicSection profile={displayProfile} />
             
             <div className="profile-section-divider" />
             
-            <PortfolioPreview portfolio={profile.portfolio} />
+            <PortfolioPreview portfolio={displayProfile.portfolio} />
           </div>
         </main>
       </div>
 
       {isEditModalOpen && (
         <EditProfileModal 
-          profile={profile} 
+          profile={displayProfile} 
           onClose={() => setIsEditModalOpen(false)} 
           onSave={handleUpdateProfile} 
         />

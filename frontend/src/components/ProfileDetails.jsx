@@ -1,6 +1,32 @@
 import React from "react";
 
 export default function ProfileDetails({ profile, onToggleAvailability }) {
+  const category = (profile.category || "").toLowerCase();
+  
+  let pricingLabel = "Price";
+  let pricingValue = profile.hourlyRate || 0;
+
+  if (category === "mehndi_artist" || category === "mehndi artist") {
+    pricingLabel = "Per Person";
+    pricingValue = profile.price_per_person;
+  } else if (category === "dancer" || category === "dance") {
+    pricingLabel = "Per Hour";
+    pricingValue = profile.price_per_hour;
+  } else if (category === "photographer" || category === "photography") {
+    pricingLabel = "Per Event";
+    pricingValue = profile.price_per_event;
+  } else {
+    // Default fallback
+    pricingLabel = "Starting Price";
+    pricingValue = profile.hourlyRate || profile.price_per_hour || 0;
+  }
+
+  // Debugging logs as requested
+  console.log("Profile Data (Details):", profile);
+  console.log("Category:", profile.category);
+  console.log("Pricing:", pricingValue);
+  console.log("Phone:", profile.phone);
+
   return (
     <div className="profile-details-grid">
       <div className="detail-col">
@@ -13,8 +39,8 @@ export default function ProfileDetails({ profile, onToggleAvailability }) {
           <span className="detail-value">{profile.phone}</span>
         </div>
         <div className="detail-item">
-          <span className="detail-label">Hourly Rate</span>
-          <span className="detail-value">₹{profile.hourlyRate}/hour</span>
+          <span className="detail-label">{pricingLabel}</span>
+          <span className="detail-value">₹{pricingValue}{pricingLabel === "Per Hour" ? "/hour" : ""}</span>
         </div>
         <div className="detail-item full-width">
           <span className="detail-label">Bio</span>

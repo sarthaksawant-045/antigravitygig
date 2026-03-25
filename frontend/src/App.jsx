@@ -39,6 +39,7 @@ import SubscriptionPage from "./pages/SubscriptionPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import MyProjects from "./pages/MyProjects.jsx";
 import ViewApplicants from "./pages/ViewApplicants.jsx";
+import GlobalCallHandler from "./components/GlobalCallHandler.jsx";
 
 const StatsStrip = () => (
   <section className="stats">
@@ -169,6 +170,7 @@ const AppContent = () => {
 export default function App() {
   return (
     <AuthProvider>
+      <GlobalCallHandler />
       <AppContent />
     </AuthProvider>
   );

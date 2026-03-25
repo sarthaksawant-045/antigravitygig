@@ -28,6 +28,22 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize Socket.IO
+try:
+    from socket_service import socketio
+    SOCKET_IO_ENABLED = True
+    print('[SOCKET] Socket.IO initialized successfully')
+except ImportError as e:
+    print(f'[SOCKET] Socket.IO import failed: {e}')
+    socketio = None
+    SOCKET_IO_ENABLED = False
+except Exception as e:
+    print(f'[SOCKET] Socket.IO initialization failed: {e}')
+    socketio = None
+    SOCKET_IO_ENABLED = False
+
+SOCKET_IO_REALLY_WORKING = False
+
 try:
     # AI chat routes are optional; failure must not block server startup.
     from ai_chat_routes import register_ai_chat_routes
@@ -1198,31 +1214,7 @@ def get_client_profile(client_id):
 
 
 
-@app.route("/freelancer/profile/<int:freelancer_id>", methods=["GET"])
-def get_freelancer_profile_by_id(freelancer_id):
-    """Fetch freelancer profile"""
-    conn = None
-    try:
-        conn = freelancer_db()
-        cur = get_dict_cursor(conn)
-        cur.execute("""
-            SELECT f.id, f.name, f.email, f.profile_image,
-                   fp.phone, fp.location, fp.bio, fp.dob, fp.pincode,
-                   fp.category, fp.title, fp.skills, fp.experience,
-                   fp.min_budget, fp.max_budget, fp.rating, fp.availability_status
-            FROM freelancer f
-            LEFT JOIN freelancer_profile fp ON fp.freelancer_id = f.id
-            WHERE f.id = %s
-        """, (freelancer_id,))
-        row = cur.fetchone()
-        if not row:
-            return jsonify({"success": False, "msg": "Freelancer not found"}), 404
-        return jsonify({"success": True, **dict(row)})
-    except Exception as e:
-        return jsonify({"success": False, "msg": "Server error occurred"}), 500
-    finally:
-        if conn:
-            conn.close()
+# Legacy freelancer profile endpoint removed - replaced by consolidated system below
 
 # LOGIN APIs (CORE LOGIC SAME)
 # ============================================================
@@ -2457,6 +2449,12 @@ def freelancers_filter():
         return jsonify({"success": True, "results": results})
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)}), 500
+
+# Legacy conversation endpoint removed - replaced by consolidated system below
+        conn.close()
+        print(f"Error in create_or_get_conversation: {e}")
+        return jsonify({"success": False, "msg": "Failed to create/get conversation"}), 500
+
 # ============================================================
 # NEW: CHAT (Client <-> Freelancer)
 # ============================================================
@@ -2470,48 +2468,69 @@ def client_send_message():
 
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
-    cur.execute("""
-        INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
-        VALUES (%s, %s, %s, %s, %s)
-    """, ("client", int(d["client_id"]), int(d["freelancer_id"]), str(d["text"]), now_ts()))
-
-    # Add notification for client in client.db - get freelancer name
-    cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
-    freelancer_row = cur.fetchone()
-    freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
     
-    # Get client name for context
-    cur.execute("SELECT name FROM client WHERE id=%s", (int(d["client_id"]),))
-    client_row = cur.fetchone()
-    client_name = (client_row.get("name") if isinstance(client_row, dict) else (client_row[0] if client_row else None)) or "Client"
-
-    # Add notification for client using notification helper
+    # Ensure conversation exists first
     try:
-        from notification_helper import notify_client
+        cur.execute("""
+            INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
+            VALUES (%s, %s, %s, %s, %s)
+        """, ("client", int(d["client_id"]), int(d["freelancer_id"]), str(d["text"]), now_ts()))
+
+        # Emit real-time message via WebSocket if available
+        if SOCKET_IO_ENABLED and socketio is not None:
+            message_data = {
+                'sender_id': str(d["client_id"]),
+                'receiver_id': str(d["freelancer_id"]),
+                'sender_role': 'client',
+                'text': str(d["text"]),
+                'timestamp': time.time()
+            }
+            socketio.emit('send_message', message_data, room=f"user_{d['freelancer_id']}")
+            print(f'[SOCKET] Real-time message sent from client {d["client_id"]} to freelancer {d["freelancer_id"]}')
+
+        # Add notification for client in client.db - get freelancer name
+        cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
+        freelancer_row = cur.fetchone()
+        freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
         
-        notify_client(
-            client_id=int(d["client_id"]),
-            message=f'You sent a message to {freelancer_name}',
-            title="Message Sent",
-            related_entity_type="message",
-            related_entity_id=None
-        )
+        # Get client name for context
+        cur.execute("SELECT name FROM client WHERE id=%s", (int(d["client_id"]),))
+        client_row = cur.fetchone()
+        client_name = (client_row.get("name") if isinstance(client_row, dict) else (client_row[0] if client_row else None)) or "Client"
+
+        # Add notification for client using notification helper
+        try:
+            from notification_helper import notify_client
+            
+            notify_client(
+                client_id=int(d["client_id"]),
+                message=f'You sent a message to {freelancer_name}',
+                title="Message Sent",
+                related_entity_type="message",
+                related_entity_id=None
+            )
+            
+            # Also notify freelancer about new message
+            notify_freelancer(
+                freelancer_id=int(d["freelancer_id"]),
+                message=f'New message from {client_name}',
+                title="New Message",
+                related_entity_type="message",
+                related_entity_id=None
+            )
+        except Exception as e:
+            print(f"Error creating message notifications: {e}")
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({"success": True})
         
-        # Also notify freelancer about new message
-        notify_freelancer(
-            freelancer_id=int(d["freelancer_id"]),
-            message=f'New message from {client_name}',
-            title="New Message",
-            related_entity_type="message",
-            related_entity_id=None
-        )
     except Exception as e:
-        print(f"Error creating message notifications: {e}")
-
-    conn.commit()
-    conn.close()
-
-    return jsonify({"success": True})
+        conn.rollback()
+        conn.close()
+        print(f"Error in client_send_message: {e}")
+        return jsonify({"success": False, "msg": "Failed to send message"}), 500
 
 @app.route("/freelancer/message/send", methods=["POST"])
 def freelancer_send_message():
@@ -2522,34 +2541,54 @@ def freelancer_send_message():
 
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
-    cur.execute("""
-        INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
-        VALUES (%s, %s, %s, %s, %s)
-    """, ("freelancer", int(d["freelancer_id"]), int(d["client_id"]), str(d["text"]), now_ts()))
     
-    # Add notification for client using notification helper
     try:
-        from notification_helper import notify_client
-        
-        # Get freelancer name for context
-        cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
-        freelancer_row = cur.fetchone()
-        freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
-        
-        notify_client(
-            client_id=int(d["client_id"]),
-            message=f'New message from {freelancer_name}',
-            title="New Message",
-            related_entity_type="message",
-            related_entity_id=None
-        )
-    except Exception as e:
-        print(f"Error creating client message notification: {e}")
-    
-    conn.commit()
-    conn.close()
+        cur.execute("""
+            INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
+            VALUES (%s, %s, %s, %s, %s)
+        """, ("freelancer", int(d["freelancer_id"]), int(d["client_id"]), str(d["text"]), now_ts()))
 
-    return jsonify({"success": True})
+        # Emit real-time message via WebSocket if available
+        if SOCKET_IO_ENABLED and socketio is not None:
+            message_data = {
+                'sender_id': str(d["freelancer_id"]),
+                'receiver_id': str(d["client_id"]),
+                'sender_role': 'freelancer',
+                'text': str(d["text"]),
+                'timestamp': time.time()
+            }
+            socketio.emit('send_message', message_data, room=f"user_{d['client_id']}")
+            print(f'[SOCKET] Real-time message sent from freelancer {d["freelancer_id"]} to client {d["client_id"]}')
+
+        # Add notification for client using notification helper
+        try:
+            from notification_helper import notify_client
+            
+            # Get freelancer name for context
+            cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
+            freelancer_row = cur.fetchone()
+            freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
+            
+            notify_client(
+                client_id=int(d["client_id"]),
+                message=f'New message from {freelancer_name}',
+                title="New Message",
+                related_entity_type="message",
+                related_entity_id=None
+            )
+        except Exception as e:
+            print(f"Error creating client message notification: {e}")
+        
+        conn.commit()
+        conn.close()
+
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        print(f"Error in freelancer_send_message: {e}")
+        return jsonify({"success": False, "msg": "Failed to send message"}), 500
 
 @app.route("/message/history", methods=["GET"])
 def message_history():
@@ -3160,12 +3199,79 @@ def freelancer_hire_respond():
     conn.commit()
     conn.close()
     
+    # Auto-create conversation when hire is accepted
+    if action == "ACCEPT":
+        try:
+            # Get client and freelancer IDs from the hire request
+            conn = freelancer_db()
+            cur = get_dict_cursor(conn)
+            cur.execute("SELECT client_id, freelancer_id FROM hire_request WHERE id=%s", (request_id,))
+            hire_data = cur.fetchone()
+            
+            if hire_data:
+                client_id = hire_data["client_id"]
+                freelancer_id = hire_data["freelancer_id"]
+                
+                # Check if conversation already exists
+                cur.execute("""
+                    SELECT id FROM conversation 
+                    WHERE client_id=%s AND freelancer_id=%s
+                """, (client_id, freelancer_id))
+                conv_row = cur.fetchone()
+                
+                welcome_message = f"Hi! I've accepted your hire request. Let's discuss the project details and get started!"
+                
+                if not conv_row:
+                    # Create new conversation
+                    cur.execute("""
+                        INSERT INTO conversation (client_id, freelancer_id, last_message_text, last_message_timestamp)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                    """, (client_id, freelancer_id, welcome_message, now_ts()))
+                    conv_id = cur.fetchone()["id"]
+                else:
+                    conv_id = conv_row["id"]
+                    # Update existing conversation
+                    cur.execute("""
+                        UPDATE conversation 
+                        SET last_message_text=%s, last_message_timestamp=%s
+                        WHERE id=%s
+                    """, (welcome_message, now_ts(), conv_id))
+                
+                # Create the welcome message entry
+                cur.execute("""
+                    INSERT INTO message (conversation_id, sender_role, sender_id, receiver_id, text, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (conv_id, "freelancer", freelancer_id, client_id, welcome_message, now_ts()))
+                
+                conn.commit()
+                print(f'[CONVERSATION] Created/Updated conversation {conv_id} for accepted hire: client {client_id} <-> freelancer {freelancer_id}')
+                
+                # Emit real-time notification if WebSocket is available
+                if SOCKET_IO_ENABLED and socketio is not None:
+                    message_data = {
+                        'id': f"{int(time.time() * 1000)}_welcome",
+                        'conversation_id': conv_id,
+                        'sender_id': str(freelancer_id),
+                        'receiver_id': str(client_id),
+                        'sender_role': 'freelancer',
+                        'text': welcome_message,
+                        'timestamp': time.time()
+                    }
+                    socketio.emit('new_message', message_data, room=f"user_{client_id}")
+                    print(f'[SOCKET] Sent welcome message to client {client_id}')
+                    
+            conn.close()
+        except Exception as e:
+            print(f"Error auto-creating conversation: {e}")
+    
     # Send notification to freelancer for counteroffer
     if action == "COUNTER":
         try:
             # Get client_id from the hire request
             client_conn = client_db()
             client_cur = get_dict_cursor(client_conn)
+            client_cur.execute("SELECT name, email FROM client WHERE id=%s", (request_id,))
             client_cur.execute("SELECT client_id FROM hire_request WHERE id=%s", (request_id,))
             client_result = client_cur.fetchone()
             client_conn.close()
@@ -3236,6 +3342,182 @@ def freelancer_hire_respond():
     return jsonify({"success": True, "status": new_status})
 
 # ============================================================
+# NEW CONVERSATION & MESSAGE SYSTEM
+# ============================================================
+
+@app.route("/conversations", methods=["POST"])
+def create_conversation():
+    d = get_json()
+    missing = require_fields(d, ["sender_id", "receiver_id"])
+    if missing:
+        return jsonify({"success": False, "msg": "Missing fields"}), 400
+    
+    # In our system, conversation is always between a client and a freelancer
+    # We need to determine who is who, or just treat them as user_ids 
+    # and use the hire_request logic context.
+    # For now, let's assume we know who is the client and who is the freelancer 
+    # based on the role passed or by checking the DB.
+    
+    sender_id = int(d["sender_id"])
+    receiver_id = int(d["receiver_id"])
+    sender_role = d.get("sender_role") # 'client' or 'freelancer'
+    
+    if sender_role == 'client':
+        client_id, freelancer_id = sender_id, receiver_id
+    elif sender_role == 'freelancer':
+        client_id, freelancer_id = receiver_id, sender_id
+    else:
+        # Fallback: check which one is a client and which is a freelancer
+        # But for simplicity, let's require sender_role or assume!
+        return jsonify({"success": False, "msg": "sender_role ('client' or 'freelancer') is required"}), 400
+
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    # Check if exists
+    cur.execute("""
+        SELECT id FROM conversation 
+        WHERE client_id=%s AND freelancer_id=%s
+    """, (client_id, freelancer_id))
+    row = cur.fetchone()
+    
+    if row:
+        conv_id = row["id"]
+        conn.close()
+        return jsonify({"success": True, "conversation_id": conv_id})
+    
+    # Create new
+    cur.execute("""
+        INSERT INTO conversation (client_id, freelancer_id, last_message_text, last_message_timestamp)
+        VALUES (%s, %s, %s, %s)
+        RETURNING id
+    """, (client_id, freelancer_id, None, None))
+    new_id = cur.fetchone()["id"]
+    conn.commit()
+    conn.close()
+    
+    return jsonify({"success": True, "conversation_id": new_id})
+
+@app.route("/conversations/<int:user_id>", methods=["GET"])
+def get_conversations(user_id):
+    role = request.args.get("role") # 'client' or 'freelancer'
+    if not role:
+        return jsonify({"success": False, "msg": "role query param ('client' or 'freelancer') is required"}), 400
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    if role == 'client':
+        cur.execute("""
+            SELECT c.id as conversation_id, c.freelancer_id as other_user_id, 
+                   f.name as other_user_name, f.profile_image as other_user_pic,
+                   c.last_message_text, c.last_message_timestamp as timestamp
+            FROM conversation c
+            JOIN freelancer f ON c.freelancer_id = f.id
+            WHERE c.client_id = %s
+            ORDER BY c.last_message_timestamp DESC NULLS LAST
+        """, (user_id,))
+    else:
+        cur.execute("""
+            SELECT c.id as conversation_id, c.client_id as other_user_id, 
+                   cl.name as other_user_name, cl.profile_image as other_user_pic,
+                   c.last_message_text, c.last_message_timestamp as timestamp
+            FROM conversation c
+            JOIN client cl ON c.client_id = cl.id
+            WHERE c.freelancer_id = %s
+            ORDER BY c.last_message_timestamp DESC NULLS LAST
+        """, (user_id,))
+    
+    rows = cur.fetchall()
+    conn.close()
+    
+    out = []
+    for r in rows:
+        out.append({
+            "conversation_id": r["conversation_id"],
+            "other_user": {
+                "id": r["other_user_id"],
+                "name": r["other_user_name"] or "User",
+                "profile_pic": r["other_user_pic"]
+            },
+            "last_message": r["last_message_text"],
+            "timestamp": r["timestamp"]
+        })
+    
+    return jsonify(out)
+
+@app.route("/messages", methods=["POST"])
+def send_message_unified():
+    d = get_json()
+    missing = require_fields(d, ["conversation_id", "sender_id", "sender_role", "message"])
+    if missing:
+        return jsonify({"success": False, "msg": "Missing fields"}), 400
+    
+    conv_id = int(d["conversation_id"])
+    sender_id = int(d["sender_id"])
+    sender_role = d["sender_role"]
+    text = d["message"]
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    # Get conversation details to find receiver
+    cur.execute("SELECT client_id, freelancer_id FROM conversation WHERE id=%s", (conv_id,))
+    conv = cur.fetchone()
+    if not conv:
+        conn.close()
+        return jsonify({"success": False, "msg": "Conversation not found"}), 404
+    
+    if sender_role == 'client':
+        receiver_id = conv["freelancer_id"]
+    else:
+        receiver_id = conv["client_id"]
+    
+    timestamp = now_ts()
+    
+    # Save message
+    cur.execute("""
+        INSERT INTO message (conversation_id, sender_role, sender_id, receiver_id, text, timestamp)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id
+    """, (conv_id, sender_role, sender_id, receiver_id, text, timestamp))
+    msg_id = cur.fetchone()["id"]
+    
+    # Update conversation
+    cur.execute("""
+        UPDATE conversation 
+        SET last_message_text=%s, last_message_timestamp=%s
+        WHERE id=%s
+    """, (text, timestamp, conv_id))
+    
+    conn.commit()
+    conn.close()
+    
+    # Real-time delivery
+    if SOCKET_IO_ENABLED and socketio is not None and SOCKET_IO_REALLY_WORKING:
+        try:
+            message_data = {
+                'id': msg_id,
+                'conversation_id': conv_id,
+                'sender_id': str(sender_id),
+                'receiver_id': str(receiver_id),
+                'sender_role': sender_role,
+                'text': text,
+                'timestamp': timestamp,
+                'type': 'message'
+            }
+            # Emit to receiver
+            socketio.emit('new_message', message_data, room=f"user_{receiver_id}")
+            # Emit to sender confirmation
+            socketio.emit('message_sent', message_data, room=f"user_{sender_id}")
+            # Emit to conversation room
+            socketio.emit('new_message', message_data, room=f"conv_{conv_id}")
+        except Exception as e:
+            print(f'[SOCKET] Real-time delivery failed: {e}')
+    
+    return jsonify({"success": True, "message_id": msg_id, "timestamp": timestamp})
+
+# ============================================================
 # CLIENT – MESSAGE THREADS (list freelancers you chatted with)
 # ============================================================
 
@@ -3287,6 +3569,64 @@ def client_message_threads():
 
         conn.close()
         return jsonify(out)
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({"success": False, "msg": str(e)}), 500
+
+# ============================================================
+# FREELANCER – MESSAGE THREADS (list clients you chatted with)
+# ============================================================
+
+@app.route("/freelancer/messages/threads", methods=["GET"])
+def freelancer_message_threads():
+    freelancer_id = request.args.get("freelancer_id")
+    if not freelancer_id:
+        return jsonify({"success": False, "msg": "freelancer_id required"}), 400
+
+    try:
+        freelancer_id = int(freelancer_id)
+    except ValueError:
+        return jsonify({"success": False, "msg": "Invalid freelancer_id"}), 400
+
+    conn = None
+    try:
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        cur.execute("""
+            SELECT DISTINCT
+                CASE
+                    WHEN sender_role='freelancer' THEN receiver_id
+                    ELSE sender_id
+                END AS client_id
+            FROM message
+            WHERE (sender_role='freelancer' AND sender_id=%s)
+               OR (sender_role='client' AND receiver_id=%s)
+            ORDER BY client_id DESC
+        """, (freelancer_id, freelancer_id))
+        all_rows = cur.fetchall()
+        ids = []
+        for r in all_rows:
+            val = r.get("client_id", r[0] if not isinstance(r, dict) else None) if r else None
+            if val is not None:
+                ids.append(int(val))
+
+        if not ids:
+            conn.close()
+            return jsonify([])
+
+        out = []
+        for cid in ids:
+            cur.execute("SELECT name, email FROM client WHERE id=%s", (cid,))
+            cr = cur.fetchone()
+            if isinstance(cr, dict):
+                out.append({"client_id": cid, "name": cr.get("name") or "Client", "email": cr.get("email") or ""})
+            else:
+                out.append({"client_id": cid, "name": (cr[0] if cr else "Client"), "email": (cr[1] if cr else "")})
+
+        conn.close()
+        return jsonify(out)
+
     except Exception as e:
         if conn:
             conn.close()
@@ -4509,6 +4849,7 @@ def get_freelancer_profile(freelancer_id):
                fp.title, fp.skills, fp.experience, fp.min_budget, fp.max_budget,
                fp.rating, fp.category, fp.bio, fp.availability_status,
                fp.pricing_type, fp.hourly_rate, fp.per_person_rate, fp.starting_price,
+               fp.fixed_price, fp.phone, fp.location, fp.pincode, fp.dob,
                fp.work_description, fp.services_included
         FROM freelancer f
         LEFT JOIN freelancer_profile fp ON fp.freelancer_id = f.id
@@ -4586,27 +4927,9 @@ def get_freelancer_profile(freelancer_id):
     
     response_data = {
         "success": True,
-        "freelancer_id": row["id"],
-        "name": row["name"],
-        "email": row["email"],
-        "profile_image": row["profile_image"],
-        "title": row["title"],
-        "skills": row["skills"],
-        "experience": row["experience"],
-        "rating": row["rating"],
-        "category": row["category"],
-        "bio": row["bio"],
-        "availability_status": row["availability_status"],
-        "pricing": pricing_info,
-        "pricing_type": pricing_type,
-        "work_description": row.get("work_description"),
-        "services_included": row.get("services_included")
+        **dict(row),
+        "pricing": pricing_info
     }
-    
-    # Include legacy budget fields for backward compatibility if they exist
-    if row.get("min_budget") or row.get("max_budget"):
-        response_data["min_budget"] = row.get("min_budget")
-        response_data["max_budget"] = row.get("max_budget")
     
     return jsonify(response_data)
 
@@ -7309,4 +7632,18 @@ if __name__ == "__main__":
         logger.error("Server will start but database operations may fail")
     
     logger.info("Starting Flask server on http://0.0.0.0:5000")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    
+    # Start with Socket.IO if available
+    if SOCKET_IO_ENABLED and socketio is not None:
+        logger.info("Starting server with Socket.IO support")
+        try:
+            SOCKET_IO_REALLY_WORKING = True
+            socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+        except Exception as e:
+            SOCKET_IO_REALLY_WORKING = False
+            logger.error(f"Socket.IO server failed: {e}")
+            logger.info("Falling back to regular Flask server")
+            app.run(host='0.0.0.0', port=5000, debug=False)
+    else:
+        logger.info("Starting server without Socket.IO support")
+        app.run(host='0.0.0.0', port=5000, debug=False)

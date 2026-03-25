@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { freelancerService } from "../services";
 import { useFavorites } from "../hooks/useFavorites";
+import socketService from '../services/socketService';
 
 const VALID_CATEGORIES = [
   "Photographer","Videographer","DJ","Singer","Dancer","Anchor",
@@ -51,6 +52,7 @@ export default function BrowseArtists() {
   const [inviteId, setInviteId] = useState(null);
   const [inviteText, setInviteText] = useState("");
   const [resetPulse, setResetPulse] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [budget, setBudget] = useState("");
@@ -94,6 +96,99 @@ export default function BrowseArtists() {
     if (sort === "rating") return [...byAvail].sort((a, b) => b.rating - a.rating);
     return byAvail;
   }, [artists, q, sort, selectedCategories, avail]);
+
+  // Handle sending message to freelancer
+  const handleSendMessage = async (freelancerId) => {
+    if (!user.isAuthenticated || !user.id) {
+      alert("Please login to send messages.");
+      return;
+    }
+
+    if (!inviteText.trim()) {
+      alert("Please enter a message.");
+      return;
+    }
+
+    setSendingMessage(true);
+    
+    try {
+      // Step 1: Create or get conversation
+      console.log('[BROWSE] Creating/getting conversation...');
+      const convResponse = await fetch('http://localhost:5000/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender_id: user.id,
+          receiver_id: freelancerId
+        })
+      });
+
+      const convData = await convResponse.json();
+      
+      if (!convResponse.success) {
+        console.error('[BROWSE] Failed to create/get conversation:', convData.msg);
+        alert('Failed to start conversation. Please try again.');
+        setSendingMessage(false);
+        return;
+      }
+
+      const conversationId = convData.conversation_id;
+      console.log('[BROWSE] Conversation ID:', conversationId);
+
+      // Step 2: Send message using existing message APIs
+      const isClient = user.role === 'client';
+      const apiUrl = isClient 
+        ? 'http://localhost:5000/client/message/send'
+        : 'http://localhost:5000/freelancer/message/send';
+      
+      const payload = isClient ? {
+        client_id: user.id,
+        freelancer_id: freelancerId,
+        text: inviteText.trim()
+      } : {
+        freelancer_id: user.id,
+        client_id: freelancerId,
+        text: inviteText.trim()
+      };
+
+      console.log('[BROWSE] Sending message:', payload);
+      
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        console.log('[BROWSE] Message sent successfully');
+        
+        // Close modal and reset form
+        setInviteId(null);
+        setInviteText("");
+        
+        // Navigate to messages page to show the conversation
+        navigate('/messages');
+        
+        // Show success message
+        alert('Message sent successfully! You can continue the conversation in Messages.');
+        
+      } else {
+        console.error('[BROWSE] Failed to send message:', data.msg);
+        alert('Failed to send message. Please try again.');
+      }
+    } catch (error) {
+      console.error('[BROWSE] Error sending message:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   return (
     <main className="ba-wrap">
@@ -244,13 +339,12 @@ export default function BrowseArtists() {
               <button
                 className="ba-invite"
                 onClick={() => {
-                  // Navigate to messages or show success
-                  alert("Please use the artist profile page to send a message.");
-                  setInviteId(null);
-                  setInviteText("");
+                  // Send the message directly
+                  handleSendMessage(inviteId);
                 }}
+                disabled={sendingMessage}
               >
-                Send Message
+                {sendingMessage ? 'Sending...' : 'Send Message'}
               </button>
             </div>
           </div>

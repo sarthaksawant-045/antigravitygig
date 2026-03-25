@@ -278,8 +278,20 @@ def create_tables():
 
     # Chat
     cur.execute("""
+    CREATE TABLE IF NOT EXISTS conversation (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER,
+        freelancer_id INTEGER,
+        last_message_text TEXT,
+        last_message_timestamp INTEGER,
+        UNIQUE(client_id, freelancer_id)
+    )
+    """)
+
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS message (
         id SERIAL PRIMARY KEY,
+        conversation_id INTEGER,
         sender_role TEXT,
         sender_id INTEGER,
         receiver_id INTEGER,
@@ -287,6 +299,9 @@ def create_tables():
         timestamp INTEGER
     )
     """)
+    
+    # Add conversation_id column if it doesn't exist (for existing tables)
+    _try_add_column(cur, "message", "conversation_id INTEGER")
 
     # Hire / Job
     cur.execute("""
@@ -1749,3 +1764,7 @@ def check_subscription_expiry():
         return 0
     finally:
         conn.close()
+
+if __name__ == "__main__":
+    create_tables()
+    print("Database tables created/updated successfully.")

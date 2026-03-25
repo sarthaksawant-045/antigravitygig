@@ -1,18 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import { User, Lock, Bell, Shield, Eye, EyeOff, Mail, Phone, Globe, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.jsx';
 import './settings.css';
 
 const SettingsPage = () => {
   const [activeSidebar, setActiveSidebar] = useState('settings');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState(null);
+  const { user } = useAuth();
   
-  // Form states
-  const [email, setEmail] = useState('john.smith@example.com');
-  const [phone, setPhone] = useState('+91 9876543210');
+  // Form states - initialize with empty values, will be populated from API
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [language, setLanguage] = useState('English');
-  const [currentPassword, setCurrentPassword] = useState('password123');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
@@ -27,13 +31,84 @@ const SettingsPage = () => {
   const [jobMatchAlerts, setJobMatchAlerts] = useState(false);
   const [twoFactorAuth, setTwoFactorAuth] = useState(false);
 
-  const handleSaveChanges = () => {
-    // Mock save action
-    console.log('Settings saved:', {
-      email, phone, language, currentPassword, newPassword, confirmPassword,
-      emailNotifications, pushNotifications, projectUpdates, messageAlerts, jobMatchAlerts, twoFactorAuth
-    });
-    alert('Settings saved successfully!');
+  // Fetch user profile data
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      if (!user.isAuthenticated || !user.id) {
+        setLoading(false);
+        // Set basic info from auth context
+        setEmail(user.email || '');
+        return;
+      }
+
+      try {
+        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          setProfileData(data);
+          setEmail(data.email || user.email || '');
+          setPhone(data.phone || '');
+        } else {
+          // Fallback to auth context data
+          setEmail(user.email || '');
+          setPhone('');
+        }
+      } catch (err) {
+        console.error("Error fetching profile data:", err);
+        // Fallback to auth context data
+        setEmail(user.email || '');
+        setPhone('');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfileData();
+  }, [user]);
+
+  const handleSaveChanges = async () => {
+    try {
+      const payload = {
+        email,
+        phone,
+        language,
+        // Only include password fields if they're filled
+        ...(currentPassword && { currentPassword }),
+        ...(newPassword && { newPassword }),
+        notifications: {
+          email: emailNotifications,
+          push: pushNotifications,
+          project: projectUpdates,
+          message: messageAlerts,
+          job: jobMatchAlerts
+        },
+        twoFactorAuth
+      };
+
+      // Update freelancer profile
+      if (user.isAuthenticated && user.id) {
+        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          alert('Settings saved successfully!');
+        } else {
+          throw new Error('Failed to save settings');
+        }
+      } else {
+        console.log('Settings to save:', payload);
+        alert('Settings saved successfully!');
+      }
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      alert('Failed to save settings. Please try again.');
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -46,6 +121,20 @@ const SettingsPage = () => {
     setShowDeleteModal(false);
     alert('Account deleted successfully');
   };
+
+  if (loading) {
+    return (
+      <div className="db-layout">
+        <DashboardHeader />
+        <div className="db-shell">
+          <DashboardSidebar active={activeSidebar} onSelect={setActiveSidebar} />
+          <main className="db-main settings-page">
+            <div className="loading-spinner">Loading settings...</div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="db-layout">

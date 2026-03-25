@@ -39,7 +39,7 @@ export default function ChatWindow({ conversation, messages, onSend, onVoiceCall
 
       <div className="chat-messages" ref={scrollRef}>
         {messages.map(msg => (
-          <div key={msg.id} className={`msg-bubble-wrap ${msg.sender}`}>
+          <div key={msg.id} className={`msg-bubble-wrap ${msg.sender === 'freelancer' ? 'sent' : 'received'}`}>
             <div className="msg-bubble">
               {msg.text}
             </div>
