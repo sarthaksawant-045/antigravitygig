@@ -7,6 +7,8 @@ export default function DashboardHeader({ onSearch }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const name = useMemo(() => user.name || user.email || "Artist", [user]);
+  const normalizedRole = String(user.role || "").toLowerCase().trim();
+  const showSearch = normalizedRole === "client";
 
   useEffect(() => {
     const close = () => setMenuOpen(false);
@@ -20,16 +22,18 @@ export default function DashboardHeader({ onSearch }) {
         <span className="db-logo-dot">G</span>
         <span className="db-logo-text">GigBridge</span>
       </div>
-      <div className="db-search">
-        <span className="db-search-ico">🔎</span>
-        <input
-          placeholder="Search gigs, events, clients..."
-          onChange={(e) => onSearch?.(e.target.value)}
-        />
-      </div>
+      {showSearch && (
+        <div className="db-search">
+          <span className="db-search-ico">{'\u{1F50E}'}</span>
+          <input
+            placeholder="Search gigs, events, clients..."
+            onChange={(e) => onSearch?.(e.target.value)}
+          />
+        </div>
+      )}
       <div className="db-actions">
         <div className="db-user" onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}>
-          <div className="db-avatar">{name.slice(0,1).toUpperCase()}</div>
+          <div className="db-avatar">{name.slice(0, 1).toUpperCase()}</div>
           <span className="db-username">{name}</span>
           {menuOpen && (
             <div className="profile-menu">

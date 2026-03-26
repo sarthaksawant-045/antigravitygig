@@ -22,6 +22,7 @@ export default function ArtistProfile() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
+  const [portfolioItems, setPortfolioItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -119,6 +120,20 @@ export default function ArtistProfile() {
       }
     }
     fetchProfile();
+  }, [id]);
+
+  useEffect(() => {
+    async function fetchPortfolio() {
+      if (!id) return;
+      try {
+        const data = await freelancerService.getPortfolio(id);
+        setPortfolioItems(data.portfolio || data.portfolio_items || []);
+      } catch {
+        setPortfolioItems([]);
+      }
+    }
+
+    fetchPortfolio();
   }, [id]);
 
   const handleHireSubmit = async (e) => {
@@ -238,6 +253,34 @@ export default function ArtistProfile() {
               </p>
             )}
             <p>{profile.description || "No bio provided."}</p>
+          </section>
+
+          <section className="ap-section">
+            <h3>Portfolio</h3>
+            {portfolioItems.length === 0 ? (
+              <p>No portfolio available</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                {portfolioItems.map((item, index) => {
+                  const imageSrc = item.image_url || item.media_url || item.image_path || item.image || 'https://via.placeholder.com/600x400?text=Portfolio';
+                  return (
+                    <div key={item.id || item.portfolio_id || index} style={{ border: '1px solid #e5e7eb', borderRadius: '14px', overflow: 'hidden', background: '#fff' }}>
+                      <img
+                        src={imageSrc}
+                        alt={item.title || 'Portfolio item'}
+                        style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block' }}
+                      />
+                      <div style={{ padding: '14px 16px' }}>
+                        <h4 style={{ margin: '0 0 6px 0', fontSize: '16px', color: '#0f172a' }}>{item.title}</h4>
+                        <p style={{ margin: 0, fontSize: '14px', color: '#64748b', lineHeight: 1.5 }}>
+                          {item.description || 'No description provided.'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {profile.gallery && profile.gallery.length > 0 && (

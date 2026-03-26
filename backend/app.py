@@ -98,7 +98,7 @@ def get_price_display(freelancer):
         return f"₹{freelancer.get('starting_price', 0)}"
     
     elif pricing_type == "project":
-        return f"₹{freelancer.get('fixed_price', 0)}"
+        return f"₹{freelancer.get('fixed_price', 0)} (project)"
     
     return "Not specified"
 
@@ -149,6 +149,42 @@ def enhance_freelancer_with_pricing(freelancer):
     return freelancer
 
 
+@app.route("/stats", methods=["GET"])
+def landing_stats():
+    """Return landing-page statistics."""
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+
+    try:
+        cur.execute("SELECT COUNT(*) AS total_artists FROM freelancer")
+        artists_row = cur.fetchone() or {}
+
+        cur.execute("""
+            SELECT COUNT(*) AS completed_projects
+            FROM project_post
+            WHERE UPPER(COALESCE(status, '')) IN ('COMPLETED', 'VERIFIED')
+        """)
+        projects_row = cur.fetchone() or {}
+
+        cur.execute("SELECT AVG(rating) AS avg_rating FROM freelancer")
+        rating_row = cur.fetchone() or {}
+
+        return jsonify({
+            "total_artists": int(artists_row.get("total_artists") or 0),
+            "completed_projects": int(projects_row.get("completed_projects") or 0),
+            "avg_rating": round(float(rating_row.get("avg_rating") or 0), 1),
+        })
+    except Exception as e:
+        logger.error(f"Error fetching landing stats: {e}")
+        return jsonify({
+            "total_artists": 0,
+            "completed_projects": 0,
+            "avg_rating": 0,
+        }), 500
+    finally:
+        conn.close()
+
+
 # ============================================================
 # AGE VALIDATION UTILITIES
 # ============================================================
@@ -179,7 +215,7 @@ def validate_age(age):
 from semantic_search import load_or_build, semantic_search, upsert_freelancer
 from filters_service import fetch_filtered_freelancers
 from database import create_tables, rebuild_freelancer_search_index, get_freelancer_verification, update_freelancer_verification, get_freelancer_subscription, update_freelancer_subscription, get_freelancer_job_applies, increment_job_applies, check_subscription_expiry, get_freelancer_plan
-from categories import is_valid_category
+from categories import get_pricing_type_for_category, is_valid_category
 
 
 # ============================================================
@@ -1924,10 +1960,15 @@ def client_profile():
         context_data={"action": "profile_update"}
     )
     
-    cur2.execute("""
-        INSERT INTO notification (client_id, message, title, related_entity_type, created_at)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (d["client_id"], enhanced_message, "Profile Update", "SYSTEM", now_ts()))
+    # Add notification using unified system
+    from notification_helper import notify_user
+    notify_user(
+        user_id=d["client_id"],
+        role="client",
+        title="Profile Update",
+        message=enhanced_message,
+        related_entity_type="SYSTEM"
+    )
 
 @app.route("/freelancer/profile", methods=["POST"])
 def freelancer_profile():
@@ -2077,8 +2118,8 @@ def freelancer_profile():
     cur.execute(
         """
         INSERT INTO freelancer_profile
-        (freelancer_id, title, skills, experience, min_budget, max_budget, bio, category, location, pincode, latitude, longitude, dob, availability_status, supports_fixed, supports_hourly, fixed_price, hourly_rate, overtime_rate_per_hour, pricing_type, per_person_rate, starting_price, searchable_price, work_description, services_included)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        (freelancer_id, title, skills, experience, min_budget, max_budget, bio, category, location, pincode, latitude, longitude, dob, availability_status, supports_fixed, supports_hourly, fixed_price, hourly_rate, overtime_rate_per_hour, pricing_type, per_person_rate, starting_price, searchable_price, work_description, services_included, phone)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT(freelancer_id) DO UPDATE SET
             title=excluded.title,
             skills=excluded.skills,
@@ -2103,7 +2144,8 @@ def freelancer_profile():
             starting_price=excluded.starting_price,
             searchable_price=excluded.searchable_price,
             work_description=excluded.work_description,
-            services_included=excluded.services_included
+            services_included=excluded.services_included,
+            phone=excluded.phone
         """,
         (
             freelancer_id,
@@ -2133,6 +2175,7 @@ def freelancer_profile():
             searchable_price,
             work_description,
             services_included,
+            d.get("phone"),
         ),
     )
     conn.commit()
@@ -2907,6 +2950,7 @@ def freelancer_details(freelancer_id: int):
     
     # Enhance with pricing display fields
     enhance_freelancer_with_pricing(response_data)
+    response_data['phone'] = profile_data.get('phone') or "Not Available"
     
     return jsonify(response_data)
 
@@ -3834,10 +3878,15 @@ def freelancer_hire_respond():
                     context_data=context_data
                 )
                 
-                freelancer_cur.execute("""
-                    INSERT INTO notification (client_id, message, title, related_entity_type, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (client_id, enhanced_message, "Counteroffer Received", "PAYMENT", now_ts()))
+                # Add notification using unified system
+                from notification_helper import notify_user
+                notify_user(
+                    user_id=client_id,
+                    role="client",
+                    title="Counteroffer Received",
+                    message=enhanced_message,
+                    related_entity_type="payment"
+                )
                 freelancer_conn.commit()
                 freelancer_conn.close()
         except Exception as e:
@@ -3870,10 +3919,15 @@ def freelancer_hire_respond():
                     context_data=context_data
                 )
                 
-                client_cur.execute("""
-                    INSERT INTO notification (freelancer_id, message, title, related_entity_type, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (freelancer_id, enhanced_message, "Counteroffer Received", "PAYMENT", now_ts()))
+                # Add notification using unified system
+                from notification_helper import notify_user
+                notify_user(
+                    user_id=freelancer_id,
+                    role="freelancer",
+                    title="Counteroffer Received",
+                    message=enhanced_message,
+                    related_entity_type="payment"
+                )
                 client_conn.commit()
                 client_conn.close()
         except Exception as e:
@@ -4665,10 +4719,15 @@ def client_send_notification():
             related_entity_type="SYSTEM"
         )
         
-        cur.execute("""
-            INSERT INTO notification (client_id, message, title, related_entity_type, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (client_id, enhanced_message, "Notification", "SYSTEM", now_ts()))
+        # Add notification using unified system
+        from notification_helper import notify_user
+        notify_user(
+            user_id=client_id,
+            role="client",
+            title="Notification",
+            message=enhanced_message,
+            related_entity_type="SYSTEM"
+        )
         conn.commit()
         conn.close()
         return jsonify({"success": True})
@@ -4692,27 +4751,10 @@ def client_notifications():
 
     try:
         from notification_helper import get_client_notifications
-        from notification_utils import enhance_notification_message, get_notification_icon
         
-        # Get notifications using centralized helper
         notifications = get_client_notifications(client_id, limit=50)
-        
-        result = []
-        for notif in notifications:
-            # Use enhanced notification message
-            enhanced_message = enhance_notification_message(
-                notif['message'],
-                title=notif['title'],
-                related_entity_type=notif['related_entity_type']
-            )
-            
-            # Add icon mapping for CLI display
-            icon = get_notification_icon(enhanced_message, notif['title'], notif['related_entity_type'])
-            formatted_message = f"{icon} {enhanced_message}"
-            
-            result.append(formatted_message)
-            
-        return jsonify(result)
+
+        return jsonify({"success": True, "notifications": notifications})
         
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)}), 500
@@ -5035,27 +5077,10 @@ def freelancer_notifications():
 
     try:
         from notification_helper import get_freelancer_notifications
-        from notification_utils import enhance_notification_message, get_notification_icon
         
-        # Get notifications using centralized helper
         notifications = get_freelancer_notifications(freelancer_id, limit=50)
-        
-        result = []
-        for notif in notifications:
-            # Use enhanced notification message
-            enhanced_message = enhance_notification_message(
-                notif['message'],
-                title=notif['title'],
-                related_entity_type=notif['related_entity_type']
-            )
-            
-            # Add icon mapping for CLI display
-            icon = get_notification_icon(enhanced_message, notif['title'], notif['related_entity_type'])
-            formatted_message = f"{icon} {enhanced_message}"
-            
-            result.append(formatted_message)
-            
-        return jsonify(result)
+
+        return jsonify({"success": True, "notifications": notifications})
         
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)}), 500
@@ -5490,6 +5515,13 @@ def get_freelancer_profile(freelancer_id):
         "pricing": pricing_info
     }
     
+    # Add dynamic price display fields for UI
+    enhance_freelancer_with_pricing(response_data)
+    
+    # Add fallback for phone
+    if not response_data.get("phone"):
+        response_data["phone"] = "Not Available"
+    
     return jsonify(response_data)
 
 # ============================================================
@@ -5658,103 +5690,99 @@ def delete_freelancer_package(package_id):
 # NEW CODE: PORTFOLIO SYSTEM
 # ============================================================
 
+def _serialize_portfolio_item(row):
+    image_url = row.get("image_url") if isinstance(row, dict) else None
+    if not image_url:
+        image_url = row.get("media_url") if isinstance(row, dict) else None
+    if not image_url:
+        image_url = row.get("image_path") if isinstance(row, dict) else None
+    if not image_url and isinstance(row, dict) and row.get("image_data") is not None:
+        import base64
+        image_url = f"data:image/*;base64,{base64.b64encode(row['image_data']).decode('utf-8')}"
+
+    return {
+        "id": row["id"],
+        "portfolio_id": row["id"],
+        "freelancer_id": row["freelancer_id"],
+        "title": row["title"],
+        "description": row["description"],
+        "image_url": image_url,
+        "image_path": row.get("image_path"),
+        "created_at": row.get("created_at"),
+    }
+
+
+@app.route("/portfolio/add", methods=["POST"])
 @app.route("/freelancer/portfolio/add", methods=["POST"])
 def add_portfolio_item():
-    """NEW CODE: Add portfolio item for freelancer"""
+    """Add portfolio item for freelancer"""
     d = get_json()
-    # Always require freelancer_id, title, description
-    base_missing = require_fields(d, ["freelancer_id", "title", "description"])
-    if base_missing:
+    missing = require_fields(d, ["freelancer_id", "title", "description"])
+    if missing:
         return jsonify({"success": False, "msg": "Missing fields"}), 400
-    media_type = (str(d.get("media_type") or "IMAGE")).strip().upper()
-    if media_type not in ("IMAGE", "VIDEO", "DOC"):
-        media_type = "IMAGE"
-    # Validate media specific requirements
-    if media_type == "IMAGE":
-        missing = require_fields(d, ["image_path"])
-        if missing:
-            return jsonify({"success": False, "msg": "Missing fields"}), 400
-    else:
-        # VIDEO/DOC require media_url
-        if not str(d.get("media_url") or "").strip():
-            return jsonify({"success": False, "msg": "media_url required"}), 400
-    
-    freelancer_id = int(d["freelancer_id"])
+
+    try:
+        freelancer_id = int(d["freelancer_id"])
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "msg": "Invalid freelancer_id"}), 400
+
     title = str(d["title"]).strip()
     description = str(d["description"]).strip()
+    image_url = str(d.get("image_url") or d.get("media_url") or "").strip()
     image_path = str(d.get("image_path") or "").strip()
-    media_url = str(d.get("media_url") or "").strip() if media_type in ("VIDEO", "DOC") else None
-    
-    # Validate freelancer exists
+
+    if not image_url and not image_path:
+        return jsonify({"success": False, "msg": "image_url required"}), 400
+
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
-    cur.execute("SELECT id FROM freelancer WHERE id=%s", (freelancer_id,))
-    if not cur.fetchone():
-        conn.close()
-        return jsonify({"success": False, "msg": "Freelancer not found"}), 404
-    
-    image_binary = None
-    if media_type == "IMAGE":
-        # Read image file as binary data instead of copying to uploads folder
-        try:
-            with open(image_path, "rb") as f:
-                image_binary = f.read()
-        except Exception as e:
-            conn.close()
-            return jsonify({"success": False, "msg": f"Failed to read image file: {str(e)}"}), 400
-    else:
-        image_path = ""  # not required for link types
-    # Insert portfolio item with media columns
-    cur.execute("""
-        INSERT INTO portfolio (freelancer_id, title, description, image_path, image_data, created_at, media_type, media_url)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-    """, (freelancer_id, title, description, image_path, image_binary, now_ts(), media_type, media_url))
-    
-    portfolio_id = cur.lastrowid
-    conn.commit()
-    conn.close()
-    rebuild_freelancer_search_index(freelancer_id)
-    return jsonify({"success": True, "portfolio_id": portfolio_id})
+    try:
+        cur.execute("SELECT id FROM freelancer WHERE id=%s", (freelancer_id,))
+        if not cur.fetchone():
+            return jsonify({"success": False, "msg": "Freelancer not found"}), 404
 
+        cur.execute("""
+            INSERT INTO portfolio (freelancer_id, title, description, image_path, image_url, media_url, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (freelancer_id, title, description, image_path or None, image_url, image_url, now_ts()))
+
+        row = cur.fetchone()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error adding portfolio item: {e}")
+        return jsonify({"success": False, "msg": "Database error"}), 500
+    finally:
+        conn.close()
+
+    rebuild_freelancer_search_index(freelancer_id)
+    return jsonify({"success": True, "portfolio_id": row["id"]})
+
+
+@app.route("/portfolio/<int:freelancer_id>", methods=["GET"])
 @app.route("/freelancer/portfolio/<int:freelancer_id>", methods=["GET"])
 def get_freelancer_portfolio(freelancer_id):
-    """NEW CODE: Get all portfolio items for a freelancer"""
+    """Get all portfolio items for a freelancer"""
     conn = freelancer_db()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    
-    cur.execute("""
-        SELECT id, title, description, image_path, image_data, created_at, media_type, media_url
-        FROM portfolio
-        WHERE freelancer_id = %s
-        ORDER BY created_at DESC
-    """, (freelancer_id,))
-    
-    rows = cur.fetchall()
-    conn.close()
-    
-    import base64
-    
-    portfolio_items = []
-    for row in rows:
-        item_data = {
-            "portfolio_id": row["id"],
-            "title": row["title"],
-            "description": row["description"],
-            "created_at": row["created_at"],
-            "media_type": row["media_type"] if "media_type" in row.keys() else "IMAGE",
-            "media_url": row["media_url"] if "media_url" in row.keys() else None
-        }
-        
-        # Return image as Base64 if BLOB data exists, otherwise fallback to image_path
-        if row["image_data"] is not None:
-            encoded_image = base64.b64encode(row["image_data"]).decode("utf-8")
-            item_data["image_base64"] = encoded_image
-        else:
-            item_data["image_path"] = row["image_path"]
-        
-        portfolio_items.append(item_data)
-    
-    return jsonify({"success": True, "portfolio_items": portfolio_items})
+
+    try:
+        cur.execute("""
+            SELECT id, freelancer_id, title, description, image_path, image_url, image_data, created_at, media_type, media_url
+            FROM portfolio
+            WHERE freelancer_id = %s
+            ORDER BY created_at DESC
+        """, (freelancer_id,))
+        rows = cur.fetchall()
+    except Exception as e:
+        logger.error(f"Error fetching portfolio: {e}")
+        return jsonify({"success": True, "portfolio": [], "portfolio_items": []})
+    finally:
+        conn.close()
+
+    portfolio_items = [_serialize_portfolio_item(row) for row in rows]
+    return jsonify({"success": True, "portfolio": portfolio_items, "portfolio_items": portfolio_items})
 
 # ============================================================
 # ===== NEW: AI Recommendation Engine =====
@@ -6485,10 +6513,15 @@ def freelancer_subscription_upgrade():
                 context_data=context_data
             )
             
-            cur.execute("""
-                INSERT INTO notification (freelancer_id, message, title, related_entity_type, created_at)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (freelancer_id, enhanced_message, "Subscription Upgraded", "SUBSCRIPTION", int(time.time())))
+            # Add notification using unified system
+            from notification_helper import notify_user
+            notify_user(
+                user_id=freelancer_id,
+                role="freelancer",
+                title="Subscription Upgraded",
+                message=enhanced_message,
+                related_entity_type="subscription"
+            )
             conn.commit()
             conn.close()
         except:
@@ -6573,7 +6606,7 @@ def get_project_applications_payload(project_id, client_id=None):
     try:
         cur = get_dict_cursor(conn)
         cur.execute("""
-            SELECT p.id, p.client_id, p.title, p.category, p.location, p.budget_type, p.description, p.status, p.created_at,
+            SELECT p.id, p.client_id, p.title, p.category, p.location, p.pricing_type, p.description, p.status, p.created_at,
                    c.name AS client_name, c.email AS client_email
             FROM project_post p
             LEFT JOIN client c ON c.id = p.client_id
@@ -6623,7 +6656,7 @@ def get_project_applications_payload(project_id, client_id=None):
                 "title": project.get("title") or "",
                 "category": project.get("category") or "",
                 "location": project.get("location") or "",
-                "budget_type": project.get("budget_type") or "",
+                "pricing_type": project.get("pricing_type") or "",
                 "description": project.get("description") or "",
                 "status": project.get("status") or "active",
                 "created_at": project.get("created_at"),
@@ -6867,7 +6900,7 @@ def get_freelancer_applications_payload(freelancer_id):
         cur = get_dict_cursor(conn)
         cur.execute("""
             SELECT pa.id, pa.project_id, pa.freelancer_id, pa.proposal, pa.bid_amount, pa.status, pa.created_at,
-                   p.title, p.category, p.location, p.budget_type, p.description, p.client_id, p.status AS project_status,
+                   p.title, p.category, p.location, p.pricing_type, p.description, p.client_id, p.status AS project_status,
                    c.name AS client_name, c.email AS client_email
             FROM project_application pa
             JOIN project_post p ON p.id = pa.project_id
@@ -6891,7 +6924,7 @@ def get_freelancer_applications_payload(freelancer_id):
                     "title": row.get("title") or "",
                     "category": row.get("category") or "",
                     "location": row.get("location") or "",
-                    "budget_type": row.get("budget_type") or "",
+                    "pricing_type": row.get("pricing_type") or "",
                     "description": row.get("description") or "",
                     "status": row.get("project_status") or "active",
                     "client_id": row.get("client_id"),
@@ -6935,7 +6968,7 @@ def freelancer_projects_apply():
     try:
         cur = get_dict_cursor(conn)
         cur.execute("""
-            SELECT p.id, p.client_id, p.title, p.category, p.location, p.budget_type, p.description, p.status,
+            SELECT p.id, p.client_id, p.title, p.category, p.location, p.pricing_type, p.description, p.status,
                    c.name AS client_name, c.email AS client_email,
                    f.name AS freelancer_name, f.email AS freelancer_email
             FROM project_post p
@@ -6973,7 +7006,7 @@ def freelancer_projects_apply():
                     "title": project_row.get("title") or "",
                     "category": project_row.get("category") or "",
                     "location": project_row.get("location") or "",
-                    "budget_type": project_row.get("budget_type") or "",
+                    "pricing_type": project_row.get("pricing_type") or "",
                     "description": project_row.get("description") or "",
                     "status": project_row.get("status") or "active",
                 },
@@ -7005,7 +7038,7 @@ def freelancer_projects_apply():
                 "title": project_row.get("title") or "",
                 "category": project_row.get("category") or "",
                 "location": project_row.get("location") or "",
-                "budget_type": project_row.get("budget_type") or "",
+                "pricing_type": project_row.get("pricing_type") or "",
                 "description": project_row.get("description") or "",
                 "status": project_row.get("status") or "active",
             },
@@ -7844,13 +7877,32 @@ def projects_search():
     conn = client_db()
     cur = get_dict_cursor(conn)
     try:
+        freelancer_category = None
+        if freelancer_id:
+            try:
+                freelancer_category = _get_freelancer_category(cur, int(freelancer_id))
+            except (TypeError, ValueError):
+                freelancer_category = None
+
+            if freelancer_category is None:
+                return jsonify({"success": True, "projects": []})
+
         search_pattern = f"%{q}%"
-        cur.execute("""
-            SELECT * FROM project_post
-            WHERE status='active'
-              AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
-            ORDER BY created_at DESC
-        """, (search_pattern, search_pattern, search_pattern))
+        if freelancer_category:
+            cur.execute("""
+                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post
+                WHERE status='active'
+                  AND LOWER(category) = LOWER(%s)
+                  AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
+                ORDER BY created_at DESC
+            """, (freelancer_category, search_pattern, search_pattern, search_pattern))
+        else:
+            cur.execute("""
+                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post
+                WHERE status='active'
+                  AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
+                ORDER BY created_at DESC
+            """, (search_pattern, search_pattern, search_pattern))
         rows = cur.fetchall()
         
         # If freelancer_id provided, get their applications to mark has_applied
@@ -7874,7 +7926,7 @@ def projects_search():
                 "title": r.get("title") if isinstance(r, dict) else r[2],
                 "category": r.get("category") if isinstance(r, dict) else r[3],
                 "location": r.get("location") if isinstance(r, dict) else r[4],
-                "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+                "pricing_type": r.get("pricing_type") if isinstance(r, dict) else r[5],
                 "description": r.get("description") if isinstance(r, dict) else r[6],
                 "status": r.get("status") if isinstance(r, dict) else r[7],
                 "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
@@ -7891,6 +7943,39 @@ def projects_search():
 # PROJECT POSTING – CLIENT
 # ============================================================
 
+def _get_freelancer_category(cur, freelancer_id):
+    """Return freelancer category for project filtering."""
+    if not freelancer_id:
+        return None
+
+    def _normalize_category_key(value):
+        text = " ".join(str(value or "").strip().lower().split())
+        aliases = {
+            "mehndi": "mehendi artist",
+            "mehndi artist": "mehendi artist",
+            "mehendi": "mehendi artist",
+        }
+        return aliases.get(text, text)
+
+    # The freelancer's working category is primarily stored in freelancer_profile.
+    cur.execute("""
+        SELECT fp.category AS profile_category, f.category AS account_category
+        FROM freelancer f
+        LEFT JOIN freelancer_profile fp ON fp.freelancer_id = f.id
+        WHERE f.id = %s
+    """, (freelancer_id,))
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    profile_category = row.get("profile_category") if isinstance(row, dict) else row[0]
+    account_category = row.get("account_category") if isinstance(row, dict) else row[1]
+
+    category = (profile_category or account_category or "").strip()
+    normalized_category = _normalize_category_key(category)
+    return normalized_category or None
+
+
 def _ensure_project_post_table():
     """Create project_post table if it doesn't exist."""
     conn = client_db()
@@ -7903,11 +7988,22 @@ def _ensure_project_post_table():
             category TEXT NOT NULL,
             location TEXT,
             budget_type TEXT,
+            pricing_type TEXT,
             description TEXT,
             status TEXT DEFAULT 'active',
             created_at INTEGER NOT NULL
         )
     """)
+    
+    # Add pricing_type column if it doesn't exist (for backward compatibility)
+    try:
+        cur.execute("""
+            ALTER TABLE project_post 
+            ADD COLUMN IF NOT EXISTS pricing_type TEXT
+        """)
+    except Exception as e:
+        print(f"Error adding pricing_type column: {e}")
+    
     conn.commit()
     conn.close()
 
@@ -7930,17 +8026,22 @@ def client_post_project():
     title = str(d["title"]).strip()[:200]
     category = str(d["category"]).strip()[:100]
     location = str(d.get("location", "") or "").strip()[:200]
-    budget_type = str(d.get("budgetType", "") or d.get("budget_type", "") or "").strip()[:50]
     description = str(d["description"]).strip()[:2000]
+
+    # Derive pricing_type from category
+    try:
+        pricing_type = get_pricing_type_for_category(category)
+    except Exception:
+        return jsonify({"success": False, "msg": "Invalid category"}), 400
 
     conn = client_db()
     cur = get_dict_cursor(conn)
     try:
         cur.execute(
-            """INSERT INTO project_post (client_id, title, category, location, budget_type, description, status, created_at)
+            """INSERT INTO project_post (client_id, title, category, location, pricing_type, description, status, created_at)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                RETURNING id""",
-            (client_id, title, category, location, budget_type, description, "active", now_ts())
+            (client_id, title, category, location, pricing_type, description, "active", now_ts())
         )
         row = cur.fetchone()
         project_id = row["id"] if isinstance(row, dict) else row[0]
@@ -7963,11 +8064,11 @@ def client_get_projects():
     try:
         if client_id:
             cur.execute(
-                "SELECT * FROM project_post WHERE client_id=%s ORDER BY created_at DESC",
+                "SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post WHERE client_id=%s ORDER BY created_at DESC",
                 (int(client_id),)
             )
         else:
-            cur.execute("SELECT * FROM project_post WHERE status='active' ORDER BY created_at DESC")
+            cur.execute("SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post WHERE status='active' ORDER BY created_at DESC")
         rows = cur.fetchall()
     except Exception as e:
         conn.close()
@@ -7981,7 +8082,7 @@ def client_get_projects():
             "title": r.get("title") if isinstance(r, dict) else r[2],
             "category": r.get("category") if isinstance(r, dict) else r[3],
             "location": r.get("location") if isinstance(r, dict) else r[4],
-            "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+            "pricing_type": r.get("pricing_type") if isinstance(r, dict) else r[5],
             "description": r.get("description") if isinstance(r, dict) else r[6],
             "status": r.get("status") if isinstance(r, dict) else r[7],
             "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
@@ -7996,7 +8097,25 @@ def projects_all():
     conn = client_db()
     cur = get_dict_cursor(conn)
     try:
-        cur.execute("SELECT * FROM project_post WHERE status='active' ORDER BY created_at DESC")
+        freelancer_category = None
+        if freelancer_id:
+            try:
+                freelancer_category = _get_freelancer_category(cur, int(freelancer_id))
+            except (TypeError, ValueError):
+                freelancer_category = None
+
+            if freelancer_category is None:
+                return jsonify({"success": True, "projects": []})
+
+        if freelancer_category:
+            cur.execute("""
+                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at
+                FROM project_post
+                WHERE status='active' AND LOWER(category) = LOWER(%s)
+                ORDER BY created_at DESC
+            """, (freelancer_category,))
+        else:
+            cur.execute("SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post WHERE status='active' ORDER BY created_at DESC")
         rows = cur.fetchall()
         
         # If freelancer_id provided, get their applications to mark has_applied
@@ -8020,7 +8139,7 @@ def projects_all():
                 "title": r.get("title") if isinstance(r, dict) else r[2],
                 "category": r.get("category") if isinstance(r, dict) else r[3],
                 "location": r.get("location") if isinstance(r, dict) else r[4],
-                "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+                "pricing_type": r.get("pricing_type") if isinstance(r, dict) else r[5],
                 "description": r.get("description") if isinstance(r, dict) else r[6],
                 "status": r.get("status") if isinstance(r, dict) else r[7],
                 "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
@@ -8048,32 +8167,12 @@ def client_notifications_by_id():
     except ValueError:
         return jsonify({"success": False, "msg": "Invalid client_id"}), 400
 
-    conn = client_db()
-    cur = get_dict_cursor(conn)
     try:
-        cur.execute(
-            """SELECT id, message, title, related_entity_type, related_entity_id, is_read, created_at
-               FROM notification WHERE client_id=%s ORDER BY created_at DESC LIMIT 50""",
-            (client_id,)
-        )
-        rows = cur.fetchall()
-    except Exception as e:
-        conn.close()
+        from notification_helper import get_client_notifications
+        notifications = get_client_notifications(client_id, limit=50)
+        return jsonify({"success": True, "notifications": notifications})
+    except Exception:
         return jsonify({"success": False, "msg": "Database error"}), 500
-    conn.close()
-
-    out = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append({
-                "id": r.get("id"),
-                "message": r.get("message"),
-                "title": r.get("title"),
-                "type": (r.get("related_entity_type") or "SYSTEM").lower(),
-                "read": bool(r.get("is_read", False)),
-                "createdAt": r.get("created_at"),
-            })
-    return jsonify({"success": True, "notifications": out})
 
 
 @app.route("/freelancer/notifications", methods=["GET"])
@@ -8087,32 +8186,12 @@ def freelancer_notifications_by_id():
     except ValueError:
         return jsonify({"success": False, "msg": "Invalid freelancer_id"}), 400
 
-    conn = freelancer_db()
-    cur = get_dict_cursor(conn)
     try:
-        cur.execute(
-            """SELECT id, message, title, related_entity_type, related_entity_id, is_read, created_at
-               FROM notification WHERE freelancer_id=%s ORDER BY created_at DESC LIMIT 50""",
-            (freelancer_id,)
-        )
-        rows = cur.fetchall()
-    except Exception as e:
-        conn.close()
+        from notification_helper import get_freelancer_notifications
+        notifications = get_freelancer_notifications(freelancer_id, limit=50)
+        return jsonify({"success": True, "notifications": notifications})
+    except Exception:
         return jsonify({"success": False, "msg": "Database error"}), 500
-    conn.close()
-
-    out = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append({
-                "id": r.get("id"),
-                "message": r.get("message"),
-                "title": r.get("title"),
-                "type": (r.get("related_entity_type") or "SYSTEM").lower(),
-                "read": bool(r.get("is_read", False)),
-                "createdAt": r.get("created_at"),
-            })
-    return jsonify({"success": True, "notifications": out})
 
 
 @app.route("/api/notifications/read-all/<int:user_id>", methods=["PUT"])
@@ -8223,6 +8302,37 @@ def payment_create_order():
         "key_id": RAZORPAY_KEY_ID
     })
 
+
+def send_payment_received_email(freelancer_email, freelancer_name, amount, project_title, client_name):
+    """Send professional payment confirmation email to freelancer."""
+    from datetime import datetime
+    current_date = datetime.now().strftime("%d %B %Y")
+    
+    subject = f"💰 Payment Received – ₹{amount} Credited"
+    
+    body = f"""Hi {freelancer_name},
+
+🎉 Payment Successful!
+
+You have received a payment for your work on GigBridge.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+💰 Amount Received: ₹{amount}
+📌 Project: {project_title}
+👤 Client: {client_name}
+📅 Date: {current_date}
+━━━━━━━━━━━━━━━━━━━━━━━
+
+The amount has been successfully credited to your account.
+
+You can view your earnings and transaction details in your dashboard.
+
+Thank you for using GigBridge 🚀
+
+Best regards,
+Team GigBridge"""
+    
+    return send_email(freelancer_email, subject, body.strip())
 
 def send_payment_receipt_emails(hire_id, order_id, payment_id, amount, currency="INR", status="Paid"):
     """Send payment receipt emails to both client and freelancer."""
@@ -8361,16 +8471,34 @@ def payment_verify():
             return jsonify({"success": False, "msg": "Database error"}), 500
         conn.close()
         try:
-            send_payment_receipt_emails(
-                hire_id=hire_id,
-                order_id=order_id,
-                payment_id=payment_id,
-                amount=hire_row.get("amount") if hire_row else 0,
-                currency="INR",
-                status="Paid"
-            )
+            # Send professional payment confirmation email to freelancer
+            if hire_row and hire_row.get("freelancer_id"):
+                conn = freelancer_db()
+                try:
+                    cur = get_dict_cursor(conn)
+                    cur.execute("""
+                        SELECT f.email, f.name, hr.job_title, c.name AS client_name
+                        FROM freelancer f
+                        JOIN hire_request hr ON hr.id = %s
+                        LEFT JOIN client c ON c.id = hr.client_id
+                        WHERE f.id = %s
+                    """, (hire_id, hire_row.get("freelancer_id")))
+                    freelancer_info = cur.fetchone()
+                    
+                    if freelancer_info and freelancer_info.get("email"):
+                        send_payment_received_email(
+                            freelancer_email=freelancer_info["email"],
+                            freelancer_name=freelancer_info.get("name", "Freelancer"),
+                            amount=int(hire_row.get("amount") or 0),
+                            project_title=freelancer_info.get("job_title", f"Project #{hire_id}"),
+                            client_name=freelancer_info.get("client_name", "Client")
+                        )
+                except Exception as e:
+                    logger.warning(f"Professional payment email failed: {e}")
+                finally:
+                    conn.close()
         except Exception as e:
-            logger.warning(f"Payment receipt emails failed: {e}")
+            logger.warning(f"Payment email integration failed: {e}")
         try:
             from notification_helper import notify_freelancer
             if hire_row:
@@ -8544,6 +8672,149 @@ def freelancer_reviews():
     conn.close()
     return jsonify({"success": True, "reviews": out})
 
+
+# ============================================================
+# NOTIFICATION APIS
+# ============================================================
+
+@app.route("/notifications", methods=["GET"])
+def notifications_list_api():
+    """Get notifications for a user"""
+    user_id = request.args.get("user_id")
+    role = request.args.get("role", "freelancer")
+    limit = int(request.args.get("limit", 50))
+    
+    if not user_id:
+        return jsonify({"success": False, "msg": "user_id required"}), 400
+    
+    # STEP 1: ROLE NORMALIZATION (CRITICAL FIX)
+    # Handle frontend role mapping: "artist" -> "freelancer"
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "msg": "Invalid user_id"}), 400
+
+    role = (role or "").lower().strip()
+    if role == "artist":
+        role = "freelancer"
+    
+    if role not in ["client", "freelancer"]:
+        print(f"[DEBUG] Invalid role provided for notifications: {role}")
+        return jsonify({"success": True, "notifications": []})
+    
+    print(f"Fetching notifications: {user_id} {role}")
+    
+    try:
+        from notification_helper import get_notifications as fetch_notifications
+        notifications = fetch_notifications(user_id, role, limit)
+        return jsonify({"success": True, "notifications": notifications})
+    except Exception as e:
+        logger.error(f"Error getting notifications: {e}")
+        return jsonify({"success": False, "msg": "Database error"}), 500
+
+
+@app.route("/notifications/unread-count", methods=["GET"])
+def get_unread_count():
+    """Get unread notification count for a user"""
+    user_id = request.args.get("user_id")
+    role = request.args.get("role", "freelancer")
+    
+    if not user_id:
+        return jsonify({"success": False, "msg": "user_id required"}), 400
+    
+    # STEP 1: ROLE NORMALIZATION (CRITICAL FIX)
+    # Handle frontend role mapping: "artist" -> "freelancer"
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "msg": "Invalid user_id"}), 400
+
+    role = (role or "").lower().strip()
+    if role == "artist":
+        role = "freelancer"
+    
+    if role not in ["client", "freelancer"]:
+        print(f"[DEBUG] Invalid role provided for unread-count: {role}")
+        return jsonify({"success": True, "unread_count": 0})
+    
+    print(f"Fetching unread count: {user_id} {role}")
+    
+    try:
+        from notification_helper import get_unread_notification_count_for_role
+        count = get_unread_notification_count_for_role(user_id, role)
+        return jsonify({"success": True, "unread_count": count})
+    except Exception as e:
+        logger.error(f"Error getting unread count: {e}")
+        return jsonify({"success": False, "msg": "Database error"}), 500
+
+
+@app.route("/notifications/mark-read", methods=["POST"])
+def mark_notification_read():
+    """Mark a notification as read"""
+    d = get_json()
+    if not d or "notification_id" not in d:
+        return jsonify({"success": False, "msg": "Missing notification_id"}), 400
+    
+    try:
+        notification_id = int(d["notification_id"])
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "msg": "Invalid notification_id"}), 400
+    
+    try:
+        from notification_helper import mark_notification_as_read, get_unread_notification_count_for_role
+        result = mark_notification_as_read(notification_id)
+        if result:
+            unread_count = get_unread_notification_count_for_role(
+                result["user_id"],
+                result.get("recipient_role") or "freelancer"
+            )
+            return jsonify({"success": True, "unread_count": unread_count})
+        else:
+            return jsonify({"success": False, "msg": "Notification not found"}), 404
+    except Exception as e:
+        logger.error(f"Error marking notification as read: {e}")
+        return jsonify({"success": False, "msg": "Database error"}), 500
+
+
+@app.route("/notifications/mark-all-read", methods=["POST"])
+def mark_all_notifications_read():
+    """Mark all notifications as read for a user"""
+    d = get_json()
+    if not d or "user_id" not in d or "role" not in d:
+        return jsonify({"success": False, "msg": "Missing user_id or role"}), 400
+    
+    user_id = d["user_id"]
+    role = d["role"]
+    
+    # STEP 1: ROLE NORMALIZATION (CRITICAL FIX)
+    # Handle frontend role mapping: "artist" -> "freelancer"
+    role = (role or "").lower().strip()
+    if role == "artist":
+        role = "freelancer"
+
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "msg": "Invalid user_id"}), 400
+    
+    if role not in ["client", "freelancer"]:
+        print(f"[DEBUG] Invalid role provided for mark-all-read: {role}")
+        return jsonify({"success": True, "marked_count": 0})
+    
+    print(f"Marking all read for: {user_id} {role}")
+    
+    try:
+        from notification_helper import mark_all_notifications_as_read
+        affected = mark_all_notifications_as_read(user_id, role)
+        return jsonify({"success": True, "marked_count": affected})
+    except Exception as e:
+        logger.error(f"Error marking all notifications as read: {e}")
+        return jsonify({"success": False, "msg": "Database error"}), 500
+
+
+# ============================================================
+# SERVER STARTUP
+# ============================================================
 
 if __name__ == "__main__":
     # Test database connection before starting server

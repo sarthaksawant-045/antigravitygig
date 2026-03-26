@@ -226,6 +226,22 @@ export default function MessagesPage() {
     }
   };
 
+  const handleBackToList = () => {
+    setSelectedId(null);
+    setMobileListOpen(true);
+  };
+
+  const handleClearChat = () => {
+    if (!selectedConvId) return;
+    setMessages(prev => ({
+      ...prev,
+      [selectedConvId]: []
+    }));
+    setConversations(prev => prev.map(c =>
+      c.id === selectedConvId ? { ...c, lastMessage: '', time: '' } : c
+    ));
+  };
+
   const handleSendMessage = async (text) => {
     if (!selectedConvId || !user.isAuthenticated || !user.id) return;
 
@@ -447,12 +463,13 @@ export default function MessagesPage() {
                   onSend={handleSendMessage}
                   onVoiceCall={handleVoiceCall}
                   onVideoCall={handleVideoCall}
-                  onBack={() => setMobileListOpen(true)}
+                  onBack={handleBackToList}
+                  onClearChat={handleClearChat}
                 />
               ) : (
                 <div className="chat-empty-state">
                   <div className="empty-icon">💬</div>
-                  <p>Select a conversation to start chatting with clients.</p>
+                  <p>Start Conversation by choosing a client from the list.</p>
                 </div>
               )}
             </div>

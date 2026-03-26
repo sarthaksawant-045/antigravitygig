@@ -1,52 +1,80 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import PortfolioHeader from '../components/PortfolioHeader';
 import PortfolioGrid from '../components/PortfolioGrid';
 import EmptyPortfolioState from '../components/EmptyPortfolioState';
 import AddProjectModal from '../components/AddProjectModal';
+import { useAuth } from '../context/AuthContext.jsx';
+import { freelancerService } from '../services/freelancerService';
 import './dashboard.css';
 import './portfolio.css';
 
-const MOCK_PROJECTS = [
-  {
-    id: 1,
-    title: "Modern E-commerce Website",
-    description: "A fully responsive e-commerce platform with advanced filtering and checkout.",
-    category: "Designer",
-    tags: ["React", "TypeScript", "Tailwind CSS"],
-    image: "https://images.unsplash.com/photo-1557821552-17105176677c?w=500"
-  },
-  {
-    id: 2,
-    title: "Mobile Banking App",
-    description: "Clean and intuitive mobile banking interface with advanced security features.",
-    category: "Designer",
-    tags: ["React Native", "UI/UX", "Figma"],
-    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500"
-  },
-  {
-    id: 3,
-    title: "Analytics Dashboard",
-    description: "Real-time analytics dashboard with interactive charts and data visualization.",
-    category: "Designer",
-    tags: ["Vue.js", "D3.js", "Node.js"],
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500"
-  }
-];
+function normalizePortfolioItems(items) {
+  return (items || []).map((item) => ({
+    id: item.id || item.portfolio_id,
+    portfolio_id: item.portfolio_id || item.id,
+    title: item.title || 'Untitled',
+    description: item.description || '',
+    image_url: item.image_url || item.media_url || item.image || item.image_path || 'https://via.placeholder.com/600x400?text=Portfolio',
+  }));
+}
 
 export default function FreelancerPortfolioPage() {
   const [active, setActive] = useState("portfolio");
-  const [projects, setProjects] = useState(MOCK_PROJECTS);
+  const [projects, setProjects] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const { user } = useAuth();
 
-  const handleAddProject = (newProject) => {
-    setProjects(prev => [{ ...newProject, id: Date.now() }, ...prev]);
-    setIsModalOpen(false);
-  };
+  useEffect(() => {
+    const fetchPortfolio = async () => {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
 
-  const handleDeleteProject = (id) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
+      try {
+        const response = await freelancerService.getPortfolio(user.id);
+        const items = response.portfolio || response.portfolio_items || [];
+        setProjects(normalizePortfolioItems(items));
+      } catch (err) {
+        setError(err.message || 'Failed to load portfolio');
+        setProjects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPortfolio();
+  }, [user?.id]);
+
+  const handleAddProject = async (newProject) => {
+    if (!user?.id) return;
+
+    setSaving(true);
+    setError('');
+    try {
+      await freelancerService.addPortfolioItem({
+        freelancer_id: user.id,
+        title: newProject.title,
+        description: newProject.description,
+        image_url: newProject.image_url,
+        media_url: newProject.image_url,
+        media_type: 'VIDEO',
+      });
+
+      const response = await freelancerService.getPortfolio(user.id);
+      const items = response.portfolio || response.portfolio_items || [];
+      setProjects(normalizePortfolioItems(items));
+      setIsModalOpen(false);
+    } catch (err) {
+      setError(err.message || 'Failed to save portfolio item');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -56,12 +84,17 @@ export default function FreelancerPortfolioPage() {
         <DashboardSidebar active={active} onSelect={setActive} />
         <main className="db-main portfolio-page">
           <PortfolioHeader onAddClick={() => setIsModalOpen(true)} />
-          
-          {projects.length > 0 ? (
-            <PortfolioGrid 
-              projects={projects} 
-              onDelete={handleDeleteProject}
-            />
+
+          {error && (
+            <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '12px' }}>
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ color: '#64748b' }}>Loading portfolio...</div>
+          ) : projects.length > 0 ? (
+            <PortfolioGrid projects={projects} />
           ) : (
             <EmptyPortfolioState onAddClick={() => setIsModalOpen(true)} />
           )}
@@ -69,9 +102,10 @@ export default function FreelancerPortfolioPage() {
       </div>
 
       {isModalOpen && (
-        <AddProjectModal 
+        <AddProjectModal
           onClose={() => setIsModalOpen(false)}
           onSave={handleAddProject}
+          saving={saving}
         />
       )}
     </div>

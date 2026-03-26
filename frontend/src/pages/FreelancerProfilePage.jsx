@@ -20,6 +20,15 @@ export default function FreelancerProfilePage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const { user } = useAuth();
 
+  const normalizePortfolio = (items) => (
+    (items || []).map((item) => ({
+      id: item.id || item.portfolio_id,
+      title: item.title || "Untitled",
+      description: item.description || "",
+      image: item.image_url || item.media_url || item.image || item.image_path || "https://via.placeholder.com/600x400?text=Portfolio",
+    }))
+  );
+
   // Fetch freelancer profile data
   useEffect(() => {
     const fetchProfile = async () => {
@@ -33,6 +42,14 @@ export default function FreelancerProfilePage() {
         const data = await response.json();
         
         if (data.success) {
+          let portfolioItems = [];
+          try {
+            const portfolioRes = await freelancerService.getPortfolio(user.id);
+            portfolioItems = normalizePortfolio(portfolioRes.portfolio || portfolioRes.portfolio_items || []);
+          } catch {
+            portfolioItems = [];
+          }
+
           // Transform backend data to match frontend structure
           const transformedProfile = {
             id: data.id,
@@ -50,13 +67,13 @@ export default function FreelancerProfilePage() {
             skills: data.skills ? (typeof data.skills === 'string' ? data.skills.split(',').map(s => s.trim()) : data.skills) : [],
             availability: data.availability_status === 'AVAILABLE',
             profileImage: data.profile_image || null,
-            portfolio: [], 
+            portfolio: portfolioItems,
             experience: data.experience || 0,
             completion: {
               basicInfo: !!(data.name && data.email && (data.phone || data.phone_number)),
               skills: !!(data.skills && data.skills.length > 0),
               verification: false,
-              portfolio: false
+              portfolio: portfolioItems.length > 0
             }
           };
 

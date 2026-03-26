@@ -9,9 +9,10 @@ const CATEGORY_MAP = {
   'Event Host': 'host'
 };
 
-export default function GigActivityCard({ gig }) {
+export default function GigActivityCard({ gig, onComplete }) {
   const categoryClass = CATEGORY_MAP[gig.category] || 'default';
-  const statusClass = gig.status.toLowerCase();
+  const statusClass = String(gig.status || '').toLowerCase();
+  const paymentStatus = String(gig.payment_status || '').toLowerCase();
 
   return (
     <div className="gig-activity-card">
@@ -20,7 +21,7 @@ export default function GigActivityCard({ gig }) {
         <p className="gig-desc">{gig.description}</p>
         <div className="gig-meta">
           <span className={`category-pill ${categoryClass}`}>{gig.category}</span>
-          <span>📅 {gig.date}</span>
+          <span>{'\u{1F4C5}'} {gig.date}</span>
         </div>
       </div>
       <div className="gig-card-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
@@ -28,9 +29,9 @@ export default function GigActivityCard({ gig }) {
           <div className="gig-hours">{gig.hours}h</div>
           <span className={`status-badge ${statusClass}`}>{gig.status}</span>
         </div>
-        
-        {gig.payment_status === "paid" && gig.event_status !== "completed" && gig.status !== "Completed" && onComplete && (
-          <button 
+
+        {paymentStatus === "paid" && gig.event_status !== "completed" && gig.status !== "Completed" && onComplete && (
+          <button
             onClick={() => onComplete(gig.id, gig.freelancer_id)}
             style={{
               padding: '0.4rem 0.8rem',

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Navbar from "./components/Navbar.jsx";
 import Hero from "./components/Hero.jsx";
 import AuthSignup from "./components/AuthSignup.jsx";
@@ -40,6 +41,7 @@ import SettingsPage from "./pages/SettingsPage.jsx";
 import MyProjects from "./pages/MyProjects.jsx";
 import ViewApplicants from "./pages/ViewApplicants.jsx";
 import GlobalCallHandler from "./components/GlobalCallHandler.jsx";
+import { api } from "./services/api";
 
 // Admin Pages
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
@@ -53,31 +55,68 @@ import AdminProjects from "./pages/admin/AdminProjects.jsx";
 import AdminPayments from "./pages/admin/AdminPayments.jsx";
 import AdminEmailLogs from "./pages/admin/AdminEmailLogs.jsx";
 
-const StatsStrip = () => (
-  <section className="stats">
-    <div className="stats-inner">
-      <div className="stat-card">
-        <div className="stat-value">10K+</div>
-        <div className="stat-label">Active Artists</div>
+function formatCompactNumber(value) {
+  const numeric = Number(value || 0);
+  if (numeric >= 1000) {
+    return `${Math.floor(numeric / 1000)}K+`;
+  }
+  return String(numeric);
+}
+
+const StatsStrip = () => {
+  const [stats, setStats] = useState({
+    total_artists: 10000,
+    completed_projects: 50000,
+    avg_rating: 4.9,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    api.get("/stats")
+      .then((data) => {
+        if (!isMounted) return;
+        setStats({
+          total_artists: Number(data.total_artists || 0),
+          completed_projects: Number(data.completed_projects || 0),
+          avg_rating: Number(data.avg_rating || 0),
+        });
+      })
+      .catch(() => {
+        if (!isMounted) return;
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return (
+    <section className="stats">
+      <div className="stats-inner">
+        <div className="stat-card">
+          <div className="stat-value">{formatCompactNumber(stats.total_artists)}</div>
+          <div className="stat-label">Active Artists</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{formatCompactNumber(stats.completed_projects)}</div>
+          <div className="stat-label">Projects Completed</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{`${Number(stats.avg_rating || 0).toFixed(1)}/5`}</div>
+          <div className="stat-label">Average Rating</div>
+        </div>
       </div>
-      <div className="stat-card">
-        <div className="stat-value">50K+</div>
-        <div className="stat-label">Projects Completed</div>
-      </div>
-      <div className="stat-card">
-        <div className="stat-value">4.9/5</div>
-        <div className="stat-label">Average Rating</div>
-      </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const AppContent = () => {
   const location = useLocation();
-  const isArtistDashboard = 
-    location.pathname.startsWith("/artist/") || 
+  const isArtistDashboard =
+    location.pathname.startsWith("/artist/") ||
     location.pathname === "/dashboard";
-  
+
   const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
@@ -178,7 +217,6 @@ const AppContent = () => {
           <ProtectedClientRoute><ViewApplicants /></ProtectedClientRoute>
         } />
 
-        {/* Admin Routes */}
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/clients" element={<AdminClients />} />

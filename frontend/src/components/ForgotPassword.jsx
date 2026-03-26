@@ -4,8 +4,14 @@ import { api } from "../services/api";
 
 const STEPS = { EMAIL: 1, OTP: 2, RESET: 3, DONE: 4 };
 
+function normalizeRole(role) {
+  const value = String(role || "client").toLowerCase().trim();
+  return value === "artist" ? "freelancer" : value === "freelancer" ? "freelancer" : "client";
+}
+
 export default function ForgotPassword() {
-  const { role = "client" } = useParams();
+  const { role: routeRole = "client" } = useParams();
+  const role = normalizeRole(routeRole);
   const navigate = useNavigate();
 
   const [step, setStep] = useState(STEPS.EMAIL);
@@ -22,7 +28,8 @@ export default function ForgotPassword() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.post("/forgot-password", { email, role });
+      const endpoint = role === "freelancer" ? "/freelancer/send-otp" : "/client/send-otp";
+      const res = await api.post(endpoint, { email });
       if (res.debug_otp) {
         setOtp(res.debug_otp);
       }
@@ -40,7 +47,8 @@ export default function ForgotPassword() {
     setLoading(true);
     setError("");
     try {
-      await api.post("/verify-reset-otp", { email, otp, role });
+      const endpoint = role === "freelancer" ? "/freelancer/verify-otp-for-reset" : "/client/verify-otp-for-reset";
+      await api.post(endpoint, { email, otp });
       setStep(STEPS.RESET);
     } catch (err) {
       setError(err.message || "Invalid OTP");
@@ -62,7 +70,8 @@ export default function ForgotPassword() {
     setLoading(true);
     setError("");
     try {
-      await api.post("/reset-password", { email, otp, new_password: newPassword, role });
+      const endpoint = role === "freelancer" ? "/freelancer/reset-password" : "/client/reset-password";
+      await api.post(endpoint, { email, new_password: newPassword });
       setStep(STEPS.DONE);
     } catch (err) {
       setError(err.message || "Failed to reset password");

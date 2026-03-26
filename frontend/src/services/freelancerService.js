@@ -80,6 +80,14 @@ export const freelancerService = {
     return await api.get(`/freelancer/${freelancerId}/packages`);
   },
 
+  getPortfolio: async (freelancerId) => {
+    return await api.get(`/freelancer/portfolio/${freelancerId}`);
+  },
+
+  addPortfolioItem: async (portfolioData) => {
+    return await api.post('/freelancer/portfolio/add', portfolioData);
+  },
+
   // ==========================================
   // PHASE 4: EXECUTION & REVIEWS
   // ==========================================

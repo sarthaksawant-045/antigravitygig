@@ -394,6 +394,7 @@ def create_tables():
     _try_add_column(cur, "portfolio", "image_data BYTEA")
     _try_add_column(cur, "portfolio", "media_type TEXT DEFAULT 'IMAGE'")
     _try_add_column(cur, "portfolio", "media_url TEXT")
+    _try_add_column(cur, "portfolio", "image_url TEXT")
 
     # Call session (freelancer.db copy)
     cur.execute("""

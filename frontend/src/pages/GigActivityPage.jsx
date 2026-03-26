@@ -8,9 +8,36 @@ import MonthlyStatsSection from '../components/MonthlyStatsSection';
 import AddGigModal from '../components/AddGigModal';
 import EmptyStateCard from '../components/EmptyStateCard';
 import { useAuth } from '../context/AuthContext';
-import { freelancerService, artistService } from '../services';
+import { artistService } from '../services';
 import './dashboard.css';
 import './gigActivity.css';
+
+const STATUS_MAP = {
+  ACCEPTED: 'Ongoing',
+  IN_PROGRESS: 'Ongoing',
+  COMPLETED: 'Completed',
+  VERIFIED: 'Completed',
+};
+
+function mapGigProject(p) {
+  const rawStatus = String(p.status || '').toUpperCase();
+  const displayStatus = STATUS_MAP[rawStatus] || p.status || 'Pending';
+
+  return {
+    id: p.id,
+    freelancer_id: p.freelancer_id,
+    title: p.title || `Project from ${p.client_name || "Client"}`,
+    description: `Project for ${p.client_name || "Client"}. Status: ${displayStatus}`,
+    category: p.category || "General",
+    date: p.start_date,
+    hours: 0,
+    status: displayStatus,
+    raw_status: rawStatus,
+    payment_status: String(p.payment_status || 'paid').toLowerCase(),
+    event_status: String(p.status || '').toLowerCase(),
+    payout_status: String(p.payout_status || 'pending'),
+  };
+}
 
 export default function GigActivityPage() {
   const { user } = useAuth();
@@ -20,36 +47,24 @@ export default function GigActivityPage() {
   const [gigs, setGigs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch real project data from backend
   useEffect(() => {
     if (!user?.id) return;
+
     setLoading(true);
     artistService.getContractProjects(user.id)
-      .then(res => {
+      .then((res) => {
         const projects = res.projects || [];
-        const mapped = projects.map(p => {
-          return {
-            id: p.id,
-            freelancer_id: p.freelancer_id,
-            title: p.title || `Project from ${p.client_name || "Client"}`,
-            description: `Project for ${p.client_name}. Status: ${p.status}`,
-            category: p.category || "General",
-            date: p.start_date,
-            hours: 0,
-            status: p.status, // ACCEPTED, IN_PROGRESS, COMPLETED, VERIFIED
-            payment_status: "Paid", 
-            event_status: p.status.toLowerCase(),
-            payout_status: "Pending",
-          };
-        }).sort((a, b) => {
-          if (!id) return 0;
-          if (String(a.id) === String(id)) return -1;
-          if (String(b.id) === String(id)) return 1;
-          return 0;
-        });
+        const mapped = projects
+          .map(mapGigProject)
+          .sort((a, b) => {
+            if (!id) return 0;
+            if (String(a.id) === String(id)) return -1;
+            if (String(b.id) === String(id)) return 1;
+            return 0;
+          });
         setGigs(mapped);
       })
-      .catch(err => {
+      .catch((err) => {
         console.error("Failed to load project activity:", err);
         setGigs([]);
       })
@@ -57,7 +72,7 @@ export default function GigActivityPage() {
   }, [user?.id, id]);
 
   const weeklySummary = useMemo(() => {
-    const totalGigs = gigs.filter(g => g.status === 'Completed' || g.status === 'Ongoing').length;
+    const totalGigs = gigs.filter((g) => g.status === 'Completed' || g.status === 'Ongoing').length;
     const totalHours = gigs.reduce((acc, curr) => acc + (curr.hours || 0), 0);
     const categoryBreakdown = gigs.reduce((acc, curr) => {
       acc[curr.category] = (acc[curr.category] || 0) + 1;
@@ -67,44 +82,31 @@ export default function GigActivityPage() {
   }, [gigs]);
 
   const monthlyStats = useMemo(() => {
-    const completed = gigs.filter(g => g.status === 'Completed');
+    const completed = gigs.filter((g) => g.status === 'Completed');
     return {
       totalGigs: gigs.length,
       performanceHours: gigs.reduce((acc, g) => acc + (g.hours || 0), 0),
       eventsWorked: completed.length,
-      estimatedEarnings: 0, // will be populated when payment tracking is added
+      estimatedEarnings: 0,
     };
   }, [gigs]);
 
   const handleAddGig = (newGig) => {
-    setGigs(prev => [{ ...newGig, id: Date.now() }, ...prev]);
+    setGigs((prev) => [{ ...newGig, id: Date.now() }, ...prev]);
     setIsModalOpen(false);
   };
 
   const handleCompleteGig = async (gigId, freelancerId) => {
     if (!window.confirm("Are you sure you want to mark this project as completed?")) return;
+
     try {
       setLoading(true);
       const res = await artistService.completeProject(freelancerId, gigId, "Completed from activity page", "");
       if (res.success) {
         alert("Project marked as completed!");
-        // Refresh
         const projRes = await artistService.getContractProjects(user.id);
         const projects = projRes.projects || [];
-        const mapped = projects.map(p => ({
-          id: p.id,
-          freelancer_id: p.freelancer_id,
-          title: p.title || `Project from ${p.client_name || "Client"}`,
-          description: `Project for ${p.client_name}. Status: ${p.status}`,
-          category: p.category || "General",
-          date: p.start_date,
-          hours: 0,
-          status: p.status,
-          payment_status: "Paid",
-          event_status: p.status.toLowerCase(),
-          payout_status: "Pending",
-        }));
-        setGigs(mapped);
+        setGigs(projects.map(mapGigProject));
       } else {
         alert(res.msg || "Error completing project.");
       }
@@ -122,7 +124,6 @@ export default function GigActivityPage() {
         <DashboardSidebar active={active} onSelect={setActive} />
         <main className="db-main gig-activity-page">
           <div className="gig-activity-grid">
-            {/* Left Section: Activity Logs */}
             <div className="gig-activity-logs">
               <div className="section-header">
                 <h3>Recent Gig Activity</h3>
@@ -135,7 +136,7 @@ export default function GigActivityPage() {
                 {loading ? (
                   <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}>Loading gig activity...</p>
                 ) : gigs.length > 0 ? (
-                  gigs.map(gig => (
+                  gigs.map((gig) => (
                     <GigActivityCard key={gig.id} gig={gig} onComplete={handleCompleteGig} />
                   ))
                 ) : (
@@ -144,19 +145,17 @@ export default function GigActivityPage() {
               </div>
             </div>
 
-            {/* Right Section: Weekly Summary */}
             <div className="gig-activity-summary">
               <WeeklySummaryCard summary={weeklySummary} />
             </div>
           </div>
 
-          {/* Bottom Section: Monthly Stats */}
           <MonthlyStatsSection stats={monthlyStats} />
         </main>
       </div>
 
       {isModalOpen && (
-        <AddGigModal 
+        <AddGigModal
           onClose={() => setIsModalOpen(false)}
           onSave={handleAddGig}
         />

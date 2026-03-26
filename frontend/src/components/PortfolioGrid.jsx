@@ -6,9 +6,9 @@ export default function PortfolioGrid({ projects, onDelete }) {
     <div className="portfolio-grid-layout">
       {projects.map(project => (
         <PortfolioCard 
-          key={project.id} 
+          key={project.id || project.portfolio_id} 
           project={project} 
-          onDelete={() => onDelete(project.id)}
+          onDelete={onDelete ? () => onDelete(project.id || project.portfolio_id) : null}
         />
       ))}
     </div>
