@@ -17,12 +17,22 @@ logger = logging.getLogger(__name__)
 # Load from environment variables with secure defaults
 def get_postgres_config():
     """Get PostgreSQL configuration from environment variables"""
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # Cloud Postgres (Neon) DSN-style connection with SSL enforced.
+        return {
+            "dsn": database_url,
+            "sslmode": "require",
+            "options": "-c client_encoding=UTF8",
+        }
+
     return {
         'host': os.getenv('POSTGRES_HOST', 'localhost'),
         'port': int(os.getenv('POSTGRES_PORT', '5432')),
         'database': os.getenv('POSTGRES_DB', 'gigbridge'),
         'user': os.getenv('POSTGRES_USER', 'postgres'),
-        'password': os.getenv('POSTGRES_PASSWORD', 'sarthak123'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'Sarthak123'),
+        'options': '-c client_encoding=UTF8',
     }
 
 # Global connection pool for better performance
@@ -34,8 +44,17 @@ def get_postgres_connection():
     config = get_postgres_config()
     
     try:
-        logger.info(f"Connecting to PostgreSQL: {config['host']}:{config['port']}/{config['database']}")
-        conn = psycopg2.connect(**config)
+        if "dsn" in config:
+            logger.info("Connecting to PostgreSQL via DATABASE_URL (SSL enabled)")
+            conn = psycopg2.connect(
+                config["dsn"],
+                sslmode=config.get("sslmode", "require"),
+                options=config.get("options", "-c client_encoding=UTF8"),
+            )
+        else:
+            logger.info(f"Connecting to PostgreSQL: {config['host']}:{config['port']}/{config['database']}")
+            conn = psycopg2.connect(**config)
+        conn.set_client_encoding("UTF8")
         conn.autocommit = False
         
         # Test the connection
@@ -48,11 +67,12 @@ def get_postgres_connection():
         
     except psycopg2.OperationalError as e:
         logger.error(f"PostgreSQL connection error: {e}")
-        logger.error("Please ensure:")
-        logger.error(f"  - PostgreSQL is running on {config['host']}:{config['port']}")
-        logger.error(f"  - Database '{config['database']}' exists")
-        logger.error(f"  - User '{config['user']}' has correct permissions")
-        logger.error(f"  - Password is correct")
+        if "dsn" not in config:
+            logger.error("Please ensure:")
+            logger.error(f"  - PostgreSQL is running on {config['host']}:{config['port']}")
+            logger.error(f"  - Database '{config['database']}' exists")
+            logger.error(f"  - User '{config['user']}' has correct permissions")
+            logger.error(f"  - Password is correct")
         logger.error("\nTo start PostgreSQL on Windows:")
         logger.error("  1. Open Services and find 'postgresql-x64-XX'")
         logger.error("  2. Right-click and select 'Start'")
@@ -148,3 +168,17 @@ def convert_sqlite_to_postgres_type(sqlite_type):
 def get_dict_cursor(connection):
     """Get cursor that returns rows as dictionaries"""
     return connection.cursor(cursor_factory=RealDictCursor)
+
+
+def verify_live_database_connection():
+    """Startup verification for live DB connectivity."""
+    try:
+        conn = get_postgres_connection()
+        conn.close()
+        print("Connected to LIVE database successfully!")
+    except Exception as err:
+        print("Database connection error:", err)
+
+
+# Verify DB connectivity once when module is loaded during server startup.
+verify_live_database_connection()

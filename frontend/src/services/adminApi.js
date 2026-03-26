@@ -6,7 +6,8 @@ const getAdminToken = () => localStorage.getItem('admin_token');
 const adminFetch = async (endpoint, options = {}) => {
   const token = getAdminToken();
   const headers = {
-    'Content-Type': 'application/json',
+    'Accept': 'application/json; charset=utf-8',
+    'Content-Type': 'application/json; charset=utf-8',
     ...options.headers,
   };
 
@@ -226,6 +227,39 @@ export const adminPaymentsApi = {
     return await adminFetch('/admin/payment/override', {
       method: 'POST',
       body: JSON.stringify({ id, status }),
+    });
+  },
+};
+
+export const adminTicketsApi = {
+  getTickets: async () => {
+    const data = await adminFetch('/api/admin/tickets');
+    return {
+      data: (data.tickets || []).map((ticket) => ({
+        ticketId: ticket.ticket_id,
+        projectId: ticket.project_id,
+        hireId: ticket.hire_id,
+        projectTitle: ticket.project_title || `Project #${ticket.project_id}`,
+        complainerId: ticket.complainer_id,
+        complainerRole: ticket.complainer_role,
+        complainerName: ticket.complainer_name || 'Unknown',
+        reason: ticket.reason,
+        status: ticket.status,
+        paymentStatus: ticket.payment_status,
+        clientName: ticket.client_name || 'Unknown',
+        artistName: ticket.artist_name || 'Unknown',
+        createdAt: ticket.created_at,
+      })),
+    };
+  },
+
+  resolveTicket: async (ticketId, verdict) => {
+    return await adminFetch('/api/admin/tickets/resolve', {
+      method: 'POST',
+      body: JSON.stringify({
+        ticket_id: ticketId,
+        verdict,
+      }),
     });
   },
 };

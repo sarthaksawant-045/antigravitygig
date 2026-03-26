@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Navbar from "./components/Navbar.jsx";
+import GlobalLoader from "./components/GlobalLoader.jsx";
 import Hero from "./components/Hero.jsx";
 import AuthSignup from "./components/AuthSignup.jsx";
 import AuthLogin from "./components/AuthLogin.jsx";
@@ -41,7 +42,7 @@ import SettingsPage from "./pages/SettingsPage.jsx";
 import MyProjects from "./pages/MyProjects.jsx";
 import ViewApplicants from "./pages/ViewApplicants.jsx";
 import GlobalCallHandler from "./components/GlobalCallHandler.jsx";
-import { api } from "./services/api";
+import { publicService } from "./services/publicService";
 
 // Admin Pages
 import AdminLogin from "./pages/admin/AdminLogin.jsx";
@@ -54,36 +55,52 @@ import AdminAuditLogs from "./pages/admin/AdminAuditLogs.jsx";
 import AdminProjects from "./pages/admin/AdminProjects.jsx";
 import AdminPayments from "./pages/admin/AdminPayments.jsx";
 import AdminEmailLogs from "./pages/admin/AdminEmailLogs.jsx";
+import AdminDisputeCenter from "./pages/admin/AdminDisputeCenter.jsx";
+import { Briefcase, Palette, Star } from "lucide-react";
 
 function formatCompactNumber(value) {
   const numeric = Number(value || 0);
   if (numeric >= 1000) {
-    return `${Math.floor(numeric / 1000)}K+`;
+    const compact = numeric / 1000;
+    const shown = compact >= 10 ? Math.round(compact) : Math.round(compact * 10) / 10;
+    return `${shown}K+`;
   }
-  return String(numeric);
+  return `${Math.round(numeric)}+`;
 }
 
 const StatsStrip = () => {
+  const fallbackStats = {
+    artists: 500,
+    projects: 2000,
+    rating: 4.5,
+  };
   const [stats, setStats] = useState({
-    total_artists: 10000,
-    completed_projects: 50000,
-    avg_rating: 4.9,
+    artists: 0,
+    projects: 0,
+    rating: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
-    api.get("/stats")
-      .then((data) => {
+    publicService.getPlatformStats()
+      .then((response) => {
         if (!isMounted) return;
+        const data = response?.data || {};
         setStats({
-          total_artists: Number(data.total_artists || 0),
-          completed_projects: Number(data.completed_projects || 0),
-          avg_rating: Number(data.avg_rating || 0),
+          artists: Number(data.total_artists || 0),
+          projects: Number(data.total_projects_completed || 0),
+          rating: Number(data.average_rating || 0),
         });
       })
       .catch(() => {
         if (!isMounted) return;
+        setStats(fallbackStats);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setLoading(false);
       });
 
     return () => {
@@ -91,21 +108,54 @@ const StatsStrip = () => {
     };
   }, []);
 
+  const statItems = [
+    {
+      key: "artists",
+      label: "Active Artists",
+      value: loading ? "..." : formatCompactNumber(stats.artists || fallbackStats.artists),
+      icon: Palette,
+      accent: "Premium talent across creative categories",
+    },
+    {
+      key: "projects",
+      label: "Projects Completed",
+      value: loading ? "..." : formatCompactNumber(stats.projects || fallbackStats.projects),
+      icon: Briefcase,
+      accent: "Trusted workflows for bookings and delivery",
+    },
+    {
+      key: "rating",
+      label: "Average Rating",
+      value: loading ? "..." : `${Number(stats.rating || fallbackStats.rating).toFixed(1)}/5`,
+      icon: Star,
+      accent: "Consistent quality from a verified artist network",
+    },
+  ];
+
   return (
-    <section className="stats">
-      <div className="stats-inner">
-        <div className="stat-card">
-          <div className="stat-value">{formatCompactNumber(stats.total_artists)}</div>
-          <div className="stat-label">Active Artists</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{formatCompactNumber(stats.completed_projects)}</div>
-          <div className="stat-label">Projects Completed</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{`${Number(stats.avg_rating || 0).toFixed(1)}/5`}</div>
-          <div className="stat-label">Average Rating</div>
-        </div>
+    <section className="stats home-stats">
+      <div className="stats-inner home-stats-inner">
+        {statItems.map((item, index) => {
+          const Icon = item.icon;
+
+          return (
+            <article
+              key={item.key}
+              className="stat-card home-stat-card"
+              data-home-reveal
+              data-home-tilt
+              style={{ "--card-delay": `${index * 90}ms` }}
+            >
+              <div className="home-stat-topline" />
+              <div className="home-stat-icon">
+                <Icon size={18} />
+              </div>
+              <div className="stat-value home-stat-value">{item.value}</div>
+              <div className="stat-label home-stat-label">{item.label}</div>
+              <p className="home-stat-accent">{item.accent}</p>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -226,6 +276,7 @@ const AppContent = () => {
         <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
         <Route path="/admin/projects" element={<AdminProjects />} />
         <Route path="/admin/payments" element={<AdminPayments />} />
+        <Route path="/admin/tickets" element={<AdminDisputeCenter />} />
         <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
 
         <Route path="*" element={<><Hero /><StatsStrip /></>} />
@@ -235,6 +286,22 @@ const AppContent = () => {
 };
 
 export default function App() {
+  const [appReady, setAppReady] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppReady(true);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  if (!appReady) {
+    return <GlobalLoader message="Loading GigBridge..." />;
+  }
+
   return (
     <AuthProvider>
       <GlobalCallHandler />

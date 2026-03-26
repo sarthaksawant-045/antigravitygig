@@ -1,8 +1,21 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { clientService } from "../services";
+import RaiseDisputeModal from "../components/RaiseDisputeModal.jsx";
 import "./MyProjects.css";
+
+const ICONS = {
+  user: "\u{1F464}",
+  date: "\u{1F4C5}",
+  money: "\u{1F4B0}",
+  folder: "\u{1F5C2}\uFE0F",
+  location: "\u{1F4CD}",
+  check: "\u2705",
+  pending: "\u23F3",
+  separator: "\u00B7",
+  rupee: "\u20B9",
+};
 
 export default function MyProjects() {
   const navigate = useNavigate();
@@ -11,6 +24,9 @@ export default function MyProjects() {
   const [contracts, setContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedContract, setSelectedContract] = useState(null);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [submittingDispute, setSubmittingDispute] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -53,6 +69,34 @@ export default function MyProjects() {
       }
     } catch (err) {
       alert("Error verifying project.");
+    }
+  };
+
+  const handleOpenDispute = (contract) => {
+    setSelectedContract(contract);
+    setDisputeModalOpen(true);
+  };
+
+  const handleRaiseDispute = async (reason) => {
+    if (!selectedContract || !user?.id) return false;
+    setSubmittingDispute(true);
+    try {
+      const res = await clientService.raiseTicket(selectedContract.id, user.id, reason);
+      if (res.success) {
+        alert(res.msg || "Dispute raised successfully.");
+        const cRes = await clientService.getContractProjects(user.id);
+        if (cRes.success) setContracts(cRes.projects || []);
+        setDisputeModalOpen(false);
+        setSelectedContract(null);
+        return true;
+      }
+      alert(res.msg || "Failed to raise dispute.");
+      return false;
+    } catch (err) {
+      alert(err.message || "Failed to raise dispute.");
+      return false;
+    } finally {
+      setSubmittingDispute(false);
     }
   };
 
@@ -130,27 +174,45 @@ export default function MyProjects() {
               </div>
               
               <div className="location-info">
-                <span>👤 {contract.freelancer_name}</span>
-                <span> · 📅 {contract.start_date}</span>
+                <span>{ICONS.user} {contract.freelancer_name}</span>
+                <span>{ICONS.separator} {ICONS.date} {contract.start_date}</span>
               </div>
 
               <div className="project-meta">
-                <span className="budget">💰 ₹{contract.agreed_price?.toLocaleString()}</span>
+                <span className="budget">{ICONS.money} {ICONS.rupee}{contract.agreed_price?.toLocaleString()}</span>
               </div>
 
               <div className="card-footer" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                {contract.status === "COMPLETED" ? (
-                  <button 
-                    style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', width: '100%', fontWeight: 600, cursor: 'pointer' }}
-                    onClick={() => handleVerify(contract.id)}
-                  >
-                    Verify & Release Payout
-                  </button>
-                ) : (
-                  <div style={{ color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
-                    {contract.status === "VERIFIED" ? "✅ Payout Requested" : "⏳ Work in Progress"}
-                  </div>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {contract.status === "COMPLETED" ? (
+                    <button 
+                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', width: '100%', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => handleVerify(contract.id)}
+                    >
+                      Verify & Release Payout
+                    </button>
+                  ) : (
+                    <div style={{ color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                      {contract.status === "VERIFIED" ? `${ICONS.check} Payout Requested` : `${ICONS.pending} Work in Progress`}
+                    </div>
+                  )}
+
+                  {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED'].includes(String(contract.status || '').toUpperCase()) &&
+                    !['PAID', 'REFUNDED', 'DISPUTED'].includes(String(contract.payment_status || '').toUpperCase()) && (
+                      <button
+                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', width: '100%', fontWeight: 600, cursor: 'pointer' }}
+                        onClick={() => handleOpenDispute(contract)}
+                      >
+                        Raise Dispute
+                      </button>
+                    )}
+
+                  {String(contract.payment_status || '').toUpperCase() === 'DISPUTED' && (
+                    <div style={{ color: '#dc2626', fontSize: '0.85rem', textAlign: 'center', fontWeight: 600 }}>
+                      Dispute Raised
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -185,22 +247,22 @@ export default function MyProjects() {
                 </div>
 
                 <div className="location-info">
-                  <span>🗂️ {project.category}</span>
-                  {project.location && <span> · 📍 {project.location}</span>}
+                  <span>{ICONS.folder} {project.category}</span>
+                  {project.location && <span>{ICONS.separator} {ICONS.location} {project.location}</span>}
                 </div>
 
                 <p className="description">{project.description}</p>
 
                 <div className="project-meta">
                   {project.budget_type && (
-                    <span className="budget">💰 {project.budget_type}</span>
+                    <span className="budget">{ICONS.money} {project.budget_type}</span>
                   )}
-                  <span className="deadline">📅 {project.created_at ? new Date(project.created_at * 1000).toLocaleDateString() : ""}</span>
+                  <span className="deadline">{ICONS.date} {project.created_at ? new Date(project.created_at * 1000).toLocaleDateString() : ""}</span>
                 </div>
 
                 <div className="card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
                   <span className={`status-text ${project.status === "ASSIGNED" ? "active" : "pending"}`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    {project.status === "ASSIGNED" ? "✅ Artist Hired" : "⏳ Awaiting Applications"}
+                    {project.status === "ASSIGNED" ? `${ICONS.check} Artist Hired` : `${ICONS.pending} Awaiting Applications`}
                   </span>
                   <button 
                     style={{ background: '#2563eb', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
@@ -214,6 +276,19 @@ export default function MyProjects() {
           })}
         </div>
       )}
+
+      <RaiseDisputeModal
+        open={disputeModalOpen}
+        projectTitle={selectedContract?.title || "Gig Project"}
+        onClose={() => {
+          if (submittingDispute) return;
+          setDisputeModalOpen(false);
+          setSelectedContract(null);
+        }}
+        onSubmit={handleRaiseDispute}
+        loading={submittingDispute}
+      />
     </div>
   );
 }
+

@@ -2,6 +2,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getUnreadCount } from "../services/notificationService.js";
+import BrandLogo from "./BrandLogo.jsx";
+import { getDashboardPath } from "../utils/branding.js";
 import "./Navbar.css"; // styling for badge and nav buttons
 
 // Notification Icon SVG
@@ -29,6 +31,8 @@ export default function Navbar() {
 
   const { user, logout } = useAuth();
   const name = user.name || user.email || "User";
+  const premiumActive = !!user?.is_premium && !!user?.premium_valid_until && new Date(user.premium_valid_until) > new Date();
+  const dashboardPath = getDashboardPath(user);
   const isFreelancerOnboarding = location.pathname.startsWith("/freelancer/create-profile/");
 
   useEffect(() => {
@@ -56,9 +60,7 @@ export default function Navbar() {
   return (
     <nav className={`navbar${isFreelancerOnboarding ? " minimal" : ""}`}>
       <div className="navbar-inner">
-        <div className="logo" onClick={(e)=>{e.stopPropagation(); navigate("/");}}>
-          <span className="logo-circle">G</span> GigBridge
-        </div>
+        <BrandLogo to={dashboardPath} size="sm" />
 
         {!isFreelancerOnboarding && (
           <button
@@ -124,6 +126,11 @@ export default function Navbar() {
               <div className="profile-wrap" onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}>
                 <div className="avatar">{name.slice(0,1).toUpperCase()}</div>
                 <span className="profile-name">{name}</span>
+                {premiumActive && (
+                  <span style={{ padding: '4px 8px', borderRadius: '999px', background: '#dbeafe', color: '#1d4ed8', fontSize: '12px', fontWeight: 700 }}>
+                    Premium
+                  </span>
+                )}
                 {menuOpen && (
                   <div className="profile-menu">
                     <button onClick={() => { logout(); navigate("/"); }}>Logout</button>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { clientService } from "../services";
 import { Star } from "lucide-react";
+import { getBrandLogoUrl } from "../utils/branding.js";
 
 export default function PaymentPage() {
   const { user } = useAuth();
@@ -61,12 +62,14 @@ export default function PaymentPage() {
       }
 
       const orderData = await clientService.createPaymentOrder(hire.request_id);
+      const brandLogoUrl = getBrandLogoUrl();
 
       const options = {
         key: orderData.key_id,
         amount: orderData.amount,
         currency: orderData.currency,
         name: "GigBridge",
+        image: brandLogoUrl,
         description: `Payment for ${hire.job_title}`,
         order_id: orderData.order_id,
         handler: async function (response) {

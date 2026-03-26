@@ -7,6 +7,7 @@ import ProfileDetails from "../components/ProfileDetails";
 import CategoryDynamicSection from "../components/CategoryDynamicSection";
 import PortfolioPreview from "../components/PortfolioPreview";
 import EditProfileModal from "../components/EditProfileModal";
+import FreelancerProfile from "../components/FreelancerProfile";
 import { freelancerService } from "../services/freelancerService";
 import { useAuth } from "../context/AuthContext.jsx";
 import "./dashboard.css";
@@ -55,6 +56,8 @@ export default function FreelancerProfilePage() {
             id: data.id,
             name: data.name || user.name,
             email: data.email || user.email,
+            is_premium: !!data.is_premium,
+            premium_valid_until: data.premium_valid_until || null,
             phone: data.phone || "Not Available",
             location: data.location || "",
             hourlyRate: data.hourly_rate || data.min_budget || 0,
@@ -180,8 +183,11 @@ export default function FreelancerProfilePage() {
 
   // Fallback profile if API fails
   const fallbackProfile = {
+    id: user.id,
     name: user.name || "User",
     email: user.email || "",
+    is_premium: false,
+    premium_valid_until: null,
     phone: "",
     location: "",
     hourlyRate: 0,
@@ -219,6 +225,7 @@ export default function FreelancerProfilePage() {
           </div>
 
           <ProfileCompletionCard completion={displayProfile.completion} />
+          <FreelancerProfile user={displayProfile} />
 
           <div className="profile-content-card">
             <ProfileHeader profile={displayProfile} />

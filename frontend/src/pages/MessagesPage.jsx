@@ -10,6 +10,8 @@ import socketService from '../services/socketService';
 import './dashboard.css';
 import './messages.css';
 
+const CHAT_EMPTY_ICON = '\u{1F4AC}';
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const [activeSidebar, setActiveSidebar] = useState('messages');
@@ -59,17 +61,25 @@ export default function MessagesPage() {
     if (!convId) return;
     
     const convIdStr = convId.toString();
-    
-    setMessages(prev => ({
-      ...prev,
-      [convIdStr]: [...(prev[convIdStr] || []), {
-        id: message.id,
-        senderId: message.sender_id,
-        sender: message.sender_role === 'freelancer' ? 'freelancer' : 'client',
-        text: message.text,
-        timestamp: new Date(message.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]
-    }));
+    const normalizedMessage = {
+      id: message.id || `${message.timestamp}_${message.sender_id}`,
+      senderId: message.sender_id,
+      sender: message.sender_role === 'freelancer' ? 'freelancer' : 'client',
+      text: message.text,
+      timestamp: new Date(message.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => {
+      const currentMessages = prev[convIdStr] || [];
+      if (currentMessages.some(existingMessage => String(existingMessage.id) === String(normalizedMessage.id))) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [convIdStr]: [...currentMessages, normalizedMessage]
+      };
+    });
 
     // Update conversation list
     setConversations(prev => prev.map(c => 
@@ -82,7 +92,7 @@ export default function MessagesPage() {
     console.log('[MSG] User status update:', status);
     // Update online status in conversations
     setConversations(prev => prev.map(c => 
-      c.id === status.user_id ? { ...c, online: status.status === 'online' } : c
+      String(c.clientId) === String(status.user_id) ? { ...c, online: status.status === 'online' } : c
     ));
   };
 
@@ -171,15 +181,15 @@ export default function MessagesPage() {
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(pollInterval);
-  }, [selectedConvId, user]);
+  }, [selectedConvId, conversations, user]);
 
   // Fetch messages when conversation is selected
-  const fetchMessages = async (clientId) => {
+  const fetchMessages = async (conversationKey) => {
     if (!user.isAuthenticated || !user.id) return;
 
     try {
-      console.log('[MSG] Fetching messages for conversation:', clientId);
-      const conv = conversations.find(c => c.id === clientId.toString() || c.id === clientId);
+      console.log('[MSG] Fetching messages for conversation:', conversationKey);
+      const conv = conversations.find(c => c.id === conversationKey.toString() || c.id === conversationKey);
       if (!conv || !conv.conversation_id) return;
       const response = await fetch(`http://localhost:5000/message/${conv.conversation_id}`);
       const data = await response.json();
@@ -197,7 +207,7 @@ export default function MessagesPage() {
         console.log('[MSG] Messages loaded:', transformedMessages.length);
         setMessages(prev => ({
           ...prev,
-          [clientId.toString()]: transformedMessages
+          [conversationKey.toString()]: transformedMessages
         }));
       } else {
         console.error('[MSG] Failed to fetch messages:', data.msg);
@@ -212,6 +222,12 @@ export default function MessagesPage() {
     [selectedConvId, conversations]
   );
 
+  useEffect(() => {
+    if (!socketConnected || !selectedConv?.conversation_id) return;
+
+    socketService.joinConversation(selectedConv.clientId, selectedConv.conversation_id);
+  }, [socketConnected, selectedConv?.conversation_id, selectedConv?.clientId]);
+
   const handleSelectConv = (id) => {
     setSelectedId(id);
     setMobileListOpen(false);
@@ -219,11 +235,6 @@ export default function MessagesPage() {
     setConversations(prev => prev.map(c => c.id === id ? { ...c, unread: 0 } : c));
     // Fetch messages for this conversation
     fetchMessages(id);
-    
-    // Join conversation room for real-time updates
-    if (socketConnected && selectedConv?.conversation_id) {
-      socketService.joinConversation(selectedConv.clientId, selectedConv.conversation_id);
-    }
   };
 
   const handleBackToList = () => {
@@ -243,7 +254,7 @@ export default function MessagesPage() {
   };
 
   const handleSendMessage = async (text) => {
-    if (!selectedConvId || !user.isAuthenticated || !user.id) return;
+    if (!selectedConvId || !selectedConv?.conversation_id || !user.isAuthenticated || !user.id) return;
 
     // Optimistic update
     const tempId = Date.now().toString();

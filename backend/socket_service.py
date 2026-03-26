@@ -13,6 +13,11 @@ socketio = SocketIO(cors_allowed_origins="*", logger=True, engineio_logger=True,
 # Store active user connections
 active_users = {}
 
+
+def emit_message_events(message, room):
+    """Emit compatible realtime message events for all messaging clients."""
+    socketio.emit('receiveMessage', message, room=room)
+
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection"""
@@ -101,6 +106,7 @@ def handle_register_user(data):
         emit('error', {'message': f'Registration failed: {str(e)}'})
 
 @socketio.on('sendMessage')
+@socketio.on('send_message')
 def handle_send_message(data):
     """Handle real-time message sending"""
     try:
@@ -143,7 +149,7 @@ def handle_send_message(data):
         
         # Send to receiver's room if they're online
         receiver_room = f"user_{receiver_id}"
-        socketio.emit('receiveMessage', message, room=receiver_room)
+        emit_message_events(message, receiver_room)
         
         # Send confirmation to sender
         sender_room = f"user_{sender_id}"
@@ -153,11 +159,11 @@ def handle_send_message(data):
         conv_id = data.get('conversation_id')
         if conv_id:
             conversation_room = f"conv_{conv_id}"
-            socketio.emit('receiveMessage', message, room=conversation_room)
+            emit_message_events(message, conversation_room)
         else:
             # Fallback to legacy room naming if no conversation_id provided
             conversation_room = f"conv_{min(sender_id, receiver_id)}_{max(sender_id, receiver_id)}"
-            socketio.emit('receiveMessage', message, room=conversation_room)
+            emit_message_events(message, conversation_room)
         
     except Exception as e:
         print(f'[SOCKET] Error sending message: {e}')

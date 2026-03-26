@@ -154,4 +154,13 @@ export const clientService = {
       project_id: projectId
     });
   },
+
+  raiseTicket: async (projectId, userId, reason) => {
+    return await api.post('/api/tickets/raise', {
+      project_id: projectId,
+      user_id: userId,
+      role: 'client',
+      reason,
+    });
+  },
 };

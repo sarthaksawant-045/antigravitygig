@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { getNotifications, markAsRead, markAllAsRead, getUnreadCount } from '../services/notificationService';
 import socketService from '../services/socketService';
 
+const EMPTY_NOTIFICATIONS_ICON = "\u{1F4ED}";
+
 export default function NotificationsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -126,7 +128,7 @@ export default function NotificationsPage() {
           </div>
         ) : notifications.length === 0 ? (
           <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>ðŸ“­</div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>{EMPTY_NOTIFICATIONS_ICON}</div>
             <p>You have no new notifications.</p>
           </div>
         ) : (

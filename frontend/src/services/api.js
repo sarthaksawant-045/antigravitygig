@@ -47,7 +47,8 @@ async function handleResponse(response) {
 async function request(endpoint, options = {}) {
   const config = {
     headers: {
-      'Content-Type': 'application/json',
+      'Accept': 'application/json; charset=utf-8',
+      'Content-Type': 'application/json; charset=utf-8',
       ...options.headers,
     },
     ...options,

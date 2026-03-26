@@ -7,6 +7,7 @@ import WeeklySummaryCard from '../components/WeeklySummaryCard';
 import MonthlyStatsSection from '../components/MonthlyStatsSection';
 import AddGigModal from '../components/AddGigModal';
 import EmptyStateCard from '../components/EmptyStateCard';
+import RaiseDisputeModal from '../components/RaiseDisputeModal';
 import { useAuth } from '../context/AuthContext';
 import { artistService } from '../services';
 import './dashboard.css';
@@ -26,6 +27,7 @@ function mapGigProject(p) {
   return {
     id: p.id,
     freelancer_id: p.freelancer_id,
+    client_id: p.client_id,
     title: p.title || `Project from ${p.client_name || "Client"}`,
     description: `Project for ${p.client_name || "Client"}. Status: ${displayStatus}`,
     category: p.category || "General",
@@ -34,8 +36,10 @@ function mapGigProject(p) {
     status: displayStatus,
     raw_status: rawStatus,
     payment_status: String(p.payment_status || 'paid').toLowerCase(),
-    event_status: String(p.status || '').toLowerCase(),
+    event_status: String(p.event_status || p.status || '').toLowerCase(),
     payout_status: String(p.payout_status || 'pending'),
+    can_raise_dispute: ['accepted', 'in_progress', 'completed', 'verified'].includes(rawStatus.toLowerCase())
+      && !['paid', 'refunded', 'disputed'].includes(String(p.payment_status || '').toLowerCase()),
   };
 }
 
@@ -46,6 +50,9 @@ export default function GigActivityPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [gigs, setGigs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [selectedGig, setSelectedGig] = useState(null);
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -117,6 +124,35 @@ export default function GigActivityPage() {
     }
   };
 
+  const handleOpenDispute = (gig) => {
+    setSelectedGig(gig);
+    setDisputeModalOpen(true);
+  };
+
+  const handleRaiseDispute = async (reason) => {
+    if (!selectedGig || !user?.id) return false;
+    setIsSubmittingDispute(true);
+    try {
+      const res = await artistService.raiseTicket(selectedGig.id, user.id, reason);
+      if (res.success) {
+        alert(res.msg || 'Dispute raised successfully.');
+        const projRes = await artistService.getContractProjects(user.id);
+        const projects = projRes.projects || [];
+        setGigs(projects.map(mapGigProject));
+        setDisputeModalOpen(false);
+        setSelectedGig(null);
+        return true;
+      }
+      alert(res.msg || 'Failed to raise dispute.');
+      return false;
+    } catch (err) {
+      alert(err.message || 'Failed to raise dispute.');
+      return false;
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
   return (
     <div className="db-layout">
       <DashboardHeader />
@@ -137,7 +173,7 @@ export default function GigActivityPage() {
                   <p style={{ textAlign: "center", color: "#94a3b8", padding: "2rem" }}>Loading gig activity...</p>
                 ) : gigs.length > 0 ? (
                   gigs.map((gig) => (
-                    <GigActivityCard key={gig.id} gig={gig} onComplete={handleCompleteGig} />
+                    <GigActivityCard key={gig.id} gig={gig} onComplete={handleCompleteGig} onRaiseDispute={handleOpenDispute} />
                   ))
                 ) : (
                   <EmptyStateCard onAdd={() => setIsModalOpen(true)} />
@@ -160,6 +196,18 @@ export default function GigActivityPage() {
           onSave={handleAddGig}
         />
       )}
+
+      <RaiseDisputeModal
+        open={disputeModalOpen}
+        projectTitle={selectedGig?.title}
+        onClose={() => {
+          if (isSubmittingDispute) return;
+          setDisputeModalOpen(false);
+          setSelectedGig(null);
+        }}
+        onSubmit={handleRaiseDispute}
+        loading={isSubmittingDispute}
+      />
     </div>
   );
 }

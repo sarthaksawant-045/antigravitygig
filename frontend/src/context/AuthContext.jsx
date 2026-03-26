@@ -25,6 +25,14 @@ function readStorage() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(readStorage);
 
+  const persistUser = useCallback((nextUser) => {
+    localStorage.setItem(KEYS.user, JSON.stringify(nextUser));
+    if ("profileCompleted" in nextUser) {
+      localStorage.setItem(KEYS.profile, String(!!nextUser.profileCompleted));
+    }
+    setUser(nextUser);
+  }, []);
+
   // ----------------------------------------------------------------
   // login – called after backend returns successful auth response
   // data shape: { id, name, email, role, profile_completed, client_id?, freelancer_id? }
@@ -44,8 +52,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem(KEYS.profile, String(!!data.profile_completed));
     localStorage.setItem(KEYS.user, JSON.stringify(userData));
 
-    setUser({ ...userData });
-  }, []);
+    persistUser({ ...userData });
+  }, [persistUser]);
 
   const logout = useCallback(() => {
     Object.values(KEYS).forEach(k => localStorage.removeItem(k));
@@ -57,6 +65,17 @@ export function AuthProvider({ children }) {
     setUser(prev => {
       const next = { ...prev, profileCompleted: true };
       localStorage.setItem(KEYS.user, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const updateUser = useCallback((partialUser) => {
+    setUser((prev) => {
+      const next = { ...prev, ...partialUser };
+      localStorage.setItem(KEYS.user, JSON.stringify(next));
+      if ("profileCompleted" in next) {
+        localStorage.setItem(KEYS.profile, String(!!next.profileCompleted));
+      }
       return next;
     });
   }, []);
@@ -73,7 +92,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, markProfileCompleted }}>
+    <AuthContext.Provider value={{ user, login, logout, markProfileCompleted, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

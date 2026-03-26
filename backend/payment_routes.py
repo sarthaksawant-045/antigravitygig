@@ -5,8 +5,9 @@ Modular extension - does not change existing hire/signup/login flows.
 import time
 import hmac
 import hashlib
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
-from database import freelancer_db, client_db, get_dict_cursor, mark_job_completed
+from database import freelancer_db, client_db, get_dict_cursor, mark_job_completed, activate_freelancer_premium_subscription
 from admin_db import log_transaction
 from payment_config import (
     RAZORPAY_KEY_ID,
@@ -29,6 +30,8 @@ from payment_config import (
 )
 
 payment_bp = Blueprint("payment", __name__)
+PREMIUM_SUBSCRIPTION_AMOUNT_RUPEES = 499
+PREMIUM_SUBSCRIPTION_AMOUNT_PAISE = 499 * 100
 
 
 def _now():
@@ -600,22 +603,41 @@ def hire_cancel():
 # ============================================================
 
 @payment_bp.route("/payment/subscription/create-order", methods=["POST"])
+@payment_bp.route("/api/payments/create-order", methods=["POST"])
 def payment_subscription_create_order():
     """Create Razorpay order for freelancer subscription upgrade."""
     data = request.get_json(silent=True) or {}
     freelancer_id = data.get("freelancer_id")
-    plan_name = (data.get("plan_name") or "").strip().upper()
+    plan_name = (data.get("plan_name") or "PREMIUM").strip().upper()
     if not freelancer_id or plan_name != "PREMIUM":
         return jsonify({"success": False, "msg": "freelancer_id and plan_name PREMIUM required"}), 400
     freelancer_id = int(freelancer_id)
-    amount_paise = 69900  # 699 INR
+    amount_paise = 499 * 100
 
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
-        cur.execute("SELECT id FROM freelancer WHERE id=%s", (freelancer_id,))
-        if not cur.fetchone():
+        cur.execute("""
+            SELECT id, is_premium, premium_valid_until
+            FROM freelancer
+            WHERE id=%s
+        """, (freelancer_id,))
+        freelancer_row = cur.fetchone()
+        if not freelancer_row:
             return jsonify({"success": False, "msg": "Freelancer not found"}), 404
+        premium_valid_until = freelancer_row.get("premium_valid_until")
+        if premium_valid_until and premium_valid_until.tzinfo is None:
+            premium_valid_until = premium_valid_until.replace(tzinfo=timezone.utc)
+        if freelancer_row.get("is_premium") and premium_valid_until and premium_valid_until > datetime.now(timezone.utc):
+            return jsonify({
+                "success": False,
+                "msg": "Premium subscription is already active.",
+                "user": {
+                    "id": freelancer_row.get("id"),
+                    "is_premium": True,
+                    "premium_valid_until": premium_valid_until.isoformat(),
+                },
+            }), 409
     finally:
         conn.close()
 
@@ -637,10 +659,11 @@ def payment_subscription_create_order():
         cur.execute("""
             INSERT INTO payment_records (subscription_id, record_type, razorpay_order_id, amount, status, created_at)
             VALUES (%s, 'subscription', %s, %s, 'created', %s)
-        """, (freelancer_id, order_id, 699.0, _now()))
+        """, (freelancer_id, order_id, PREMIUM_SUBSCRIPTION_AMOUNT_RUPEES, _now()))
         conn.commit()
         return jsonify({
             "success": True,
+            "plan_name": "PREMIUM",
             "razorpay_order_id": order_id,
             "amount": amount_paise,
             "currency": "INR",
@@ -651,6 +674,7 @@ def payment_subscription_create_order():
 
 
 @payment_bp.route("/payment/subscription/verify", methods=["POST"])
+@payment_bp.route("/api/payments/verify", methods=["POST"])
 def payment_subscription_verify():
     """Verify subscription payment and activate plan."""
     data = request.get_json(silent=True) or {}
@@ -673,8 +697,6 @@ def payment_subscription_verify():
         if not rec:
             return jsonify({"success": False, "msg": "Order not found"}), 404
         if str(rec.get("status") or "") == "paid":
-            from database import update_freelancer_subscription
-            update_freelancer_subscription(freelancer_id, "PREMIUM", 30)
             return jsonify({"success": True, "msg": "Already activated"})
 
         if not _verify_razorpay_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
@@ -686,9 +708,30 @@ def payment_subscription_verify():
         """, (razorpay_payment_id, razorpay_signature, rec["payment_id"]))
         conn.commit()
 
-        from database import update_freelancer_subscription
-        update_freelancer_subscription(freelancer_id, "PREMIUM", 30)
-        return jsonify({"success": True, "msg": "Subscription activated"})
+        updated_user = activate_freelancer_premium_subscription(freelancer_id, days=90)
+        if not updated_user:
+            return jsonify({"success": False, "msg": "Payment verified but subscription activation failed"}), 500
+
+        return jsonify({
+            "success": True,
+            "msg": "Subscription activated",
+            "data": {
+                "freelancer_id": freelancer_id,
+                "razorpay_order_id": razorpay_order_id,
+                "razorpay_payment_id": razorpay_payment_id,
+            },
+            "user": {
+                "id": updated_user.get("id"),
+                "name": updated_user.get("name"),
+                "email": updated_user.get("email"),
+                "role": "freelancer",
+                "is_premium": bool(updated_user.get("is_premium")),
+                "premium_valid_until": (
+                    updated_user.get("premium_valid_until").isoformat()
+                    if updated_user.get("premium_valid_until") else None
+                ),
+            },
+        })
     except Exception as e:
         if conn:
             conn.rollback()

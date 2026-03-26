@@ -9,7 +9,7 @@ const CATEGORY_MAP = {
   'Event Host': 'host'
 };
 
-export default function GigActivityCard({ gig, onComplete }) {
+export default function GigActivityCard({ gig, onComplete, onRaiseDispute }) {
   const categoryClass = CATEGORY_MAP[gig.category] || 'default';
   const statusClass = String(gig.status || '').toLowerCase();
   const paymentStatus = String(gig.payment_status || '').toLowerCase();
@@ -46,6 +46,30 @@ export default function GigActivityCard({ gig, onComplete }) {
           >
             Mark as Complete
           </button>
+        )}
+
+        {gig.can_raise_dispute && onRaiseDispute && (
+          <button
+            onClick={() => onRaiseDispute(gig)}
+            style={{
+              padding: '0.4rem 0.8rem',
+              backgroundColor: '#ef4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            Raise Dispute
+          </button>
+        )}
+
+        {paymentStatus === 'disputed' && (
+          <span style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 600 }}>
+            Dispute Raised
+          </span>
         )}
       </div>
     </div>

@@ -147,4 +147,13 @@ export const artistService = {
       proof: proof
     });
   },
+
+  raiseTicket: async (projectId, userId, reason) => {
+    return await api.post('/api/tickets/raise', {
+      project_id: projectId,
+      user_id: userId,
+      role: 'artist',
+      reason,
+    });
+  },
 };

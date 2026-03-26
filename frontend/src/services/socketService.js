@@ -12,6 +12,11 @@ class SocketService {
     this.eventHandlers = {};
   }
 
+  forwardMessageEvent(message) {
+    this.emit('receiveMessage', message);
+    this.emit('new_message', message);
+  }
+
   // Initialize socket connection
   connect(userId, userRole = 'client') {
     if (this.socket && this.connected) {
@@ -57,7 +62,12 @@ class SocketService {
       // Message events
       this.socket.on('new_message', (message) => {
         console.log('[SOCKET] New message received:', message);
-        this.emit('new_message', message);
+        this.forwardMessageEvent(message);
+      });
+
+      this.socket.on('receiveMessage', (message) => {
+        console.log('[SOCKET] receiveMessage event received:', message);
+        this.forwardMessageEvent(message);
       });
 
       this.socket.on('message_sent', (message) => {
@@ -149,13 +159,17 @@ class SocketService {
       return false;
     }
 
-    this.socket.emit('send_message', {
+    const payload = {
       sender_id: this.userId,
       receiver_id: receiverId,
       text: text,
       sender_role: this.userRole,
       conversation_id: conversationId
-    });
+    };
+
+    // Support both legacy and current backend event names.
+    this.socket.emit('sendMessage', payload);
+    this.socket.emit('send_message', payload);
     return true;
   }
 

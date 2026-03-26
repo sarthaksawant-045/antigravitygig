@@ -1,6 +1,7 @@
 import psycopg2
 import psycopg2.errors
 from datetime import datetime
+from html import escape
 from flask import Flask, request, jsonify
 from database import client_db, freelancer_db, mark_job_completed
 from psycopg2.extras import RealDictCursor
@@ -23,6 +24,7 @@ from admin_routes import admin_bp
 from kyc_routes import kyc_bp
 from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
+from ticket_routes import ticket_bp
 import logging
 
 # Configure logging
@@ -149,38 +151,29 @@ def enhance_freelancer_with_pricing(freelancer):
     return freelancer
 
 
-@app.route("/stats", methods=["GET"])
-def landing_stats():
-    """Return landing-page statistics."""
+def _get_public_platform_stats():
+    """Reuse existing aggregate-style admin metrics for public landing stats."""
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
-
     try:
-        cur.execute("SELECT COUNT(*) AS total_artists FROM freelancer")
+        cur.execute("SELECT COUNT(*) AS total_freelancers FROM freelancer")
         artists_row = cur.fetchone() or {}
 
-        cur.execute("""
-            SELECT COUNT(*) AS completed_projects
-            FROM project_post
-            WHERE UPPER(COALESCE(status, '')) IN ('COMPLETED', 'VERIFIED')
-        """)
+        cur.execute("SELECT COUNT(*) AS total_completed_projects FROM projects WHERE status='COMPLETED'")
         projects_row = cur.fetchone() or {}
 
-        cur.execute("SELECT AVG(rating) AS avg_rating FROM freelancer")
+        cur.execute("""
+            SELECT AVG(rating) AS average_rating
+            FROM freelancer_profile
+            WHERE rating IS NOT NULL AND rating > 0
+        """)
         rating_row = cur.fetchone() or {}
 
-        return jsonify({
-            "total_artists": int(artists_row.get("total_artists") or 0),
-            "completed_projects": int(projects_row.get("completed_projects") or 0),
-            "avg_rating": round(float(rating_row.get("avg_rating") or 0), 1),
-        })
-    except Exception as e:
-        logger.error(f"Error fetching landing stats: {e}")
-        return jsonify({
-            "total_artists": 0,
-            "completed_projects": 0,
-            "avg_rating": 0,
-        }), 500
+        return {
+            "total_artists": int(artists_row.get("total_freelancers") or 0),
+            "total_projects_completed": int(projects_row.get("total_completed_projects") or 0),
+            "average_rating": round(float(rating_row.get("average_rating") or 0), 1),
+        }
     finally:
         conn.close()
 
@@ -224,7 +217,52 @@ from categories import get_pricing_type_for_category, is_valid_category
 
 from flask_cors import CORS
 app = Flask(__name__)
-CORS(app)
+app.config["JSON_AS_ASCII"] = False
+app.config["JSONIFY_MIMETYPE"] = "application/json"
+if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
+    app.json.ensure_ascii = False
+CORS(
+    app,
+    resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+    supports_credentials=True,
+)
+
+@app.route("/api/public/platform-stats", methods=["GET"])
+def public_platform_stats():
+    try:
+        data = _get_public_platform_stats()
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        logger.error(f"Error fetching public platform stats: {e}")
+        return jsonify({
+            "success": False,
+            "data": {
+                "total_artists": 0,
+                "total_projects_completed": 0,
+                "average_rating": 0.0,
+            }
+        }), 500
+
+
+@app.route("/stats", methods=["GET"])
+def landing_stats():
+    """
+    Backward-compatible stats endpoint used by older frontend calls.
+    """
+    try:
+        data = _get_public_platform_stats()
+        return jsonify({
+            "total_artists": data["total_artists"],
+            "completed_projects": data["total_projects_completed"],
+            "avg_rating": data["average_rating"],
+        })
+    except Exception as e:
+        logger.error(f"Error fetching landing stats: {e}")
+        return jsonify({
+            "total_artists": 0,
+            "completed_projects": 0,
+            "avg_rating": 0,
+        }), 500
 
 @app.errorhandler(Exception)
 def handle_exception(e):
@@ -257,6 +295,8 @@ def log_request_info():
 
 @app.after_request
 def log_response_info(response):
+    if response.mimetype == "application/json":
+        response.headers["Content-Type"] = "application/json; charset=utf-8"
     if request.path.startswith('/static') or request.path == '/favicon.ico':
         return response
     logger.info(f"\n{'='*20} OUTGOING RESPONSE {'='*19}")
@@ -371,6 +411,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(kyc_bp)
 app.register_blueprint(client_kyc_bp)
 app.register_blueprint(payment_bp)
+app.register_blueprint(ticket_bp)
 
 # Register database chat routes
 
@@ -395,6 +436,8 @@ APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+EMAIL_LOGO_URL = os.getenv("EMAIL_LOGO_URL", f"{FRONTEND_BASE_URL}/assets/gigbridgelogo.png")
 
 # ============================================================
 # OTP CONFIG
@@ -735,16 +778,54 @@ def projects_list():
     
     if role == "client":
         cur.execute("""
-            SELECT p.*, f.name as freelancer_name, f.email as freelancer_email
+            SELECT
+                p.id,
+                p.hire_id,
+                p.client_id,
+                p.freelancer_id,
+                p.title,
+                p.agreed_price,
+                p.pricing_type,
+                p.start_date,
+                p.start_time,
+                p.end_date,
+                p.end_time,
+                p.status,
+                p.created_at,
+                COALESCE(p.payment_status, hr.payment_status, 'pending') AS payment_status,
+                COALESCE(p.payout_status, hr.payout_status, 'pending') AS payout_status,
+                COALESCE(hr.event_status, LOWER(p.status)) AS event_status,
+                f.name as freelancer_name,
+                f.email as freelancer_email
             FROM projects p
+            LEFT JOIN hire_request hr ON hr.id = p.hire_id
             JOIN freelancer f ON f.id = p.freelancer_id
             WHERE p.client_id = %s
             ORDER BY p.created_at DESC
         """, (user_id,))
     else:
         cur.execute("""
-            SELECT p.*, c.name as client_name, c.email as client_email
+            SELECT
+                p.id,
+                p.hire_id,
+                p.client_id,
+                p.freelancer_id,
+                p.title,
+                p.agreed_price,
+                p.pricing_type,
+                p.start_date,
+                p.start_time,
+                p.end_date,
+                p.end_time,
+                p.status,
+                p.created_at,
+                COALESCE(p.payment_status, hr.payment_status, 'pending') AS payment_status,
+                COALESCE(p.payout_status, hr.payout_status, 'pending') AS payout_status,
+                COALESCE(hr.event_status, LOWER(p.status)) AS event_status,
+                c.name as client_name,
+                c.email as client_email
             FROM projects p
+            LEFT JOIN hire_request hr ON hr.id = p.hire_id
             JOIN client c ON c.id = p.client_id
             WHERE p.freelancer_id = %s
             ORDER BY p.created_at DESC
@@ -983,6 +1064,38 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 # EMAIL HELPERS
 # ============================================================
 
+def build_branded_email_html(subject, body):
+    escaped_subject = escape(subject or "GigBridge Update")
+    escaped_body = escape(body or "").replace("\n", "<br />")
+    return f"""
+    <html>
+      <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:32px 16px;">
+          <tr>
+            <td align="center">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;overflow:hidden;">
+                <tr>
+                  <td align="center" style="padding:32px 24px 18px;background:linear-gradient(135deg,#eff6ff,#ffffff);">
+                    <a href="{FRONTEND_BASE_URL}" style="display:inline-block;text-decoration:none;">
+                      <img src="{EMAIL_LOGO_URL}" alt="GigBridge logo" style="height:72px;width:auto;display:block;margin:0 auto 16px;" />
+                    </a>
+                    <div style="font-size:28px;font-weight:700;letter-spacing:-0.02em;color:#0f172a;">GigBridge</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:0 32px 32px;">
+                    <h1 style="margin:0 0 14px;font-size:24px;line-height:1.25;color:#0f172a;">{escaped_subject}</h1>
+                    <div style="font-size:15px;line-height:1.7;color:#475569;">{escaped_body}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+    </html>
+    """
+
 def send_email(to_email, subject, body, related_project_id=None):
     if not SENDER_EMAIL or not APP_PASSWORD:
         print("❌ Email credentials missing. Logging to DB as Failed.")
@@ -994,6 +1107,7 @@ def send_email(to_email, subject, body, related_project_id=None):
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.set_content(body)
+    msg.add_alternative(build_branded_email_html(subject, body), subtype="html")
 
     server = None
     try:
@@ -4093,7 +4207,7 @@ def send_message_unified():
     conn.close()
     
     # Real-time delivery
-    if SOCKET_IO_ENABLED and socketio is not None and SOCKET_IO_REALLY_WORKING:
+    if SOCKET_IO_ENABLED and socketio is not None:
         try:
             message_data = {
                 'id': msg_id,
@@ -5429,7 +5543,7 @@ def get_freelancer_profile(freelancer_id):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     cur.execute("""
-        SELECT f.id, f.name, f.email, f.profile_image,
+        SELECT f.id, f.name, f.email, f.profile_image, f.is_premium, f.premium_valid_until,
                fp.title, fp.skills, fp.experience, fp.min_budget, fp.max_budget,
                fp.rating, fp.category, fp.bio, fp.availability_status,
                fp.pricing_type, fp.hourly_rate, fp.per_person_rate, fp.starting_price,

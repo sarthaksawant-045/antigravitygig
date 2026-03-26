@@ -1,6 +1,7 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import psycopg2.errors
+from datetime import datetime, timedelta, timezone
 from postgres_config import get_postgres_connection, is_column_exists_error, is_table_exists_error, is_unique_violation_error, get_dict_cursor
 
 def client_db():
@@ -232,6 +233,8 @@ def create_tables():
 
     # Profile photo support
     _try_add_column(cur, "freelancer", "profile_image TEXT")
+    _try_add_column(cur, "freelancer", "is_premium BOOLEAN DEFAULT FALSE")
+    _try_add_column(cur, "freelancer", "premium_valid_until TIMESTAMP")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_profile (
@@ -692,10 +695,38 @@ def create_tables():
         start_time TEXT,
         end_date TEXT,
         end_time TEXT,
+        payment_status TEXT,
+        payout_status TEXT,
         status TEXT DEFAULT 'ACCEPTED',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+    _try_add_column(cur, "projects", "payment_status TEXT")
+    _try_add_column(cur, "projects", "payout_status TEXT")
+
+    # ==========================
+    # TICKETS / DISPUTES
+    # ==========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS tickets (
+        ticket_id SERIAL PRIMARY KEY,
+        project_id INTEGER NOT NULL,
+        hire_id INTEGER,
+        complainer_id INTEGER NOT NULL,
+        complainer_role TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        status TEXT DEFAULT 'OPEN',
+        verdict TEXT,
+        admin_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP
+    )
+    """)
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tickets_status_created_at ON tickets(status, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tickets_project_id ON tickets(project_id)")
+    except Exception:
+        pass
 
     db.commit()
 
@@ -1650,6 +1681,7 @@ def update_freelancer_subscription(freelancer_id: int, plan_name: str, days: int
         import time
         current_time = int(time.time())
         end_time = current_time + (days * 24 * 60 * 60)
+        premium_valid_until = datetime.utcfromtimestamp(end_time) if plan_name in ["PRO", "PREMIUM"] else None
         
         # Check if record exists
         cur.execute("SELECT id FROM freelancer_subscription WHERE freelancer_id=%s", (fid,))
@@ -1676,6 +1708,12 @@ def update_freelancer_subscription(freelancer_id: int, plan_name: str, days: int
             SET current_plan=%s
             WHERE freelancer_id=%s
         """, (plan_name, fid))
+
+        cur.execute("""
+            UPDATE freelancer
+            SET is_premium=%s, premium_valid_until=%s
+            WHERE id=%s
+        """, (plan_name in ["PRO", "PREMIUM"], premium_valid_until, fid))
         
         # Reset job applies for paid plans
         if plan_name in ["PRO", "PREMIUM"]:
@@ -1689,6 +1727,63 @@ def update_freelancer_subscription(freelancer_id: int, plan_name: str, days: int
         return True
     except Exception:
         return False
+    finally:
+        conn.close()
+
+
+def activate_freelancer_premium_subscription(freelancer_id: int, days: int = 90):
+    """Activate PREMIUM for a fixed number of days and return the updated user object."""
+    try:
+        fid = int(freelancer_id)
+    except Exception:
+        return None
+
+    current_dt = datetime.now(timezone.utc)
+    valid_until_dt = current_dt + timedelta(days=days)
+    start_ts = int(current_dt.timestamp())
+    end_ts = int(valid_until_dt.timestamp())
+
+    conn = freelancer_db()
+    try:
+        cur = get_dict_cursor(conn)
+        cur.execute("SELECT id FROM freelancer_subscription WHERE freelancer_id=%s", (fid,))
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute("""
+                UPDATE freelancer_subscription
+                SET plan_name='PREMIUM', start_date=%s, end_date=%s, status='ACTIVE'
+                WHERE freelancer_id=%s
+            """, (start_ts, end_ts, fid))
+        else:
+            cur.execute("""
+                INSERT INTO freelancer_subscription
+                (freelancer_id, plan_name, start_date, end_date, status)
+                VALUES (%s, 'PREMIUM', %s, %s, 'ACTIVE')
+            """, (fid, start_ts, end_ts))
+
+        cur.execute("""
+            UPDATE freelancer_profile
+            SET current_plan='PREMIUM', job_applies_used=0
+            WHERE freelancer_id=%s
+        """, (fid,))
+        cur.execute("""
+            UPDATE freelancer
+            SET is_premium=TRUE, premium_valid_until=%s
+            WHERE id=%s
+        """, (valid_until_dt, fid))
+        cur.execute("""
+            SELECT id, name, email, is_premium, premium_valid_until
+            FROM freelancer
+            WHERE id=%s
+        """, (fid,))
+        updated_user = cur.fetchone()
+        conn.commit()
+        return updated_user
+    except Exception:
+        if conn:
+            conn.rollback()
+        return None
     finally:
         conn.close()
 
@@ -1799,6 +1894,11 @@ def check_subscription_expiry():
                 UPDATE freelancer_profile 
                 SET current_plan='BASIC', job_applies_used=0
                 WHERE freelancer_id=%s
+            """, (freelancer_id,))
+            cur.execute("""
+                UPDATE freelancer
+                SET is_premium=FALSE, premium_valid_until=NULL
+                WHERE id=%s
             """, (freelancer_id,))
         
         conn.commit()

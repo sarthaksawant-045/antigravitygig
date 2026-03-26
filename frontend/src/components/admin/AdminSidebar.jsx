@@ -1,7 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, UserCheck, FileCheck, ScrollText, LogOut, Briefcase, IndianRupee } from 'lucide-react';
+import { LayoutDashboard, Users, FileCheck, ScrollText, LogOut, Briefcase, IndianRupee, AlertTriangle } from 'lucide-react';
 import { adminAuthApi } from '../../services/adminApi';
 import { useNavigate } from 'react-router-dom';
+import BrandLogo from '../BrandLogo.jsx';
 
 export default function AdminSidebar() {
   const location = useLocation();
@@ -16,6 +17,7 @@ export default function AdminSidebar() {
     { path: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/admin/projects', icon: Briefcase, label: 'Projects' },
     { path: '/admin/payments', icon: IndianRupee, label: 'Payments' },
+    { path: '/admin/tickets', icon: AlertTriangle, label: 'Dispute Center' },
     { path: '/admin/email-logs', icon: ScrollText, label: 'Email Logs' },
     { path: '/admin/clients', icon: Users, label: 'Clients' },
     { path: '/admin/freelancers', icon: Briefcase, label: 'Freelancers' },
@@ -27,11 +29,8 @@ export default function AdminSidebar() {
     <div className="w-64 bg-zinc-900 border-r border-zinc-800 h-screen flex flex-col fixed left-0 top-0">
       <div className="p-6 border-b border-zinc-800">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-sky-500 rounded-lg flex items-center justify-center">
-            <UserCheck className="w-6 h-6 text-white" />
-          </div>
           <div>
-            <h1 className="text-white font-bold text-lg">GigBridge</h1>
+            <BrandLogo to="/admin/dashboard" size="sm" textClassName="text-white" />
             <p className="text-gray-400 text-xs">Admin Panel</p>
           </div>
         </div>
