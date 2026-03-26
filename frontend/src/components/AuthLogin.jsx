@@ -13,7 +13,9 @@ export default function AuthLogin() {
   const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleInputChange = (e) => {
@@ -21,8 +23,26 @@ export default function AuthLogin() {
     setError("");
   };
 
-  const handleGoogleLogin = () => {
-    window.location.href = `${apiBase}/auth/google?role=${role}`;
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      let response = await fetch(`${apiBase}/auth/google?role=${role}`);
+      let data = await response.json();
+
+      if (response.status === 404) {
+        response = await fetch(`${apiBase}/auth/google/start?role=${role}`);
+        data = await response.json();
+      }
+
+      if (!response.ok || data?.success === false || !data?.auth_url) {
+        throw new Error(data?.msg || "Google login is not available right now.");
+      }
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err.message || "Google login failed. Please try again.");
+      setGoogleLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -90,14 +110,31 @@ export default function AuthLogin() {
             </label>
             <label>
               <span>Password</span>
-              <input
-                type="password"
-                name="password"
-                placeholder="Enter your password"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-              />
+              <div className="password-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                />
+                <span
+                  className="eye-icon"
+                  onClick={() => setShowPassword(!showPassword)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setShowPassword((prev) => !prev);
+                    }
+                  }}
+                >
+                  {showPassword ? "🙈" : "👁"}
+                </span>
+              </div>
             </label>
 
             <div style={{textAlign: 'right', marginTop: '-0.5rem', marginBottom: '0.5rem'}}>
@@ -113,9 +150,9 @@ export default function AuthLogin() {
               {loading ? "Logging in..." : "Login"}
             </button>
 
-            <button type="button" className="auth-google" onClick={handleGoogleLogin}>
+            <button type="button" className="auth-google" onClick={handleGoogleLogin} disabled={googleLoading}>
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" />
-              Continue with Google
+              {googleLoading ? "Connecting to Google..." : "Continue with Google"}
             </button>
           </form>
 

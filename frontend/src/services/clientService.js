@@ -86,14 +86,24 @@ export const clientService = {
   // NEW: Fetch all active projects (for freelancer browsing)
   getAllProjects: async (freelancerId = null) => {
     const url = freelancerId ? `/projects/all?freelancer_id=${freelancerId}` : '/projects/all';
-    return await api.get(url);
+    try {
+      return await api.get(url);
+    } catch (error) {
+      if (!freelancerId) throw error;
+      return await api.get('/projects/all');
+    }
   },
 
   // NEW: Search projects by keyword
   searchProjects: async (query, freelancerId = null) => {
     let url = `/projects/search?q=${encodeURIComponent(query)}`;
     if (freelancerId) url += `&freelancer_id=${freelancerId}`;
-    return await api.get(url);
+    try {
+      return await api.get(url);
+    } catch (error) {
+      if (!freelancerId) throw error;
+      return await api.get(`/projects/search?q=${encodeURIComponent(query)}`);
+    }
   },
 
   // ==========================================

@@ -2,64 +2,36 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
-  Camera,
-  Music2,
-  Palette,
   Play,
-  Search,
   Sparkles,
-  Star,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
-import illustratorArt from "../assets/onboarding/illustrator.svg";
-import musicianArt from "../assets/onboarding/musician.svg";
-import painterArt from "../assets/onboarding/painter.svg";
-import photographerArt from "../assets/onboarding/photographer.svg";
 
 const TYPEWRITER_TERMS = [
-  "illustrators with cinematic portfolios",
-  "musicians for immersive live sets",
-  "photographers with editorial polish",
-  "painters for bold visual storytelling",
+  "illustrators with gallery-grade restraint",
+  "musicians for atmospheric commissions",
+  "photographers with museum-level polish",
+  "painters for bold cultural storytelling",
 ];
 
-const SHOWCASE_CARDS = [
-  {
-    title: "Illustrators",
-    subtitle: "Editorial, concept, and brand worlds",
-    image: illustratorArt,
-    icon: Palette,
-  },
-  {
-    title: "Musicians",
-    subtitle: "Live performers and studio-ready talent",
-    image: musicianArt,
-    icon: Music2,
-  },
-  {
-    title: "Photographers",
-    subtitle: "Campaign shoots and visual direction",
-    image: photographerArt,
-    icon: Camera,
-  },
-];
+const HERO_CONTENT = {
+  kicker: "#1 Platform for Creative Talent",
+  title: "Hire Talented Artists for Your",
+  titleAccent: "Creative Projects",
+  subtitle:
+    "Connect with professional designers, illustrators, painters, and digital artists worldwide.",
+  primaryButtonText: "Hire a Freelancer",
+  secondaryButtonText: "Become an Artist",
+};
 
-const PROOF_POINTS = [
-  "Premium creative matching",
-  "Verified artist-first profiles",
-  "Fast, secure collaboration flow",
+const FLOATING_PIECES = [
+  { id: "orb-one", type: "orb", depth: 0.12 },
+  { id: "orb-two", type: "orb", depth: 0.16 },
+  { id: "ribbon-one", type: "chrome-ribbon", depth: 0.2 },
+  { id: "ribbon-two", type: "chrome-ribbon", depth: 0.26 },
+  { id: "silk-one", type: "silk", depth: 0.18 },
+  { id: "silk-two", type: "silk", depth: 0.22 },
 ];
-
-function buildParticles() {
-  return Array.from({ length: 18 }, (_, index) => ({
-    id: index,
-    size: 8 + (index % 5) * 4,
-    left: 4 + ((index * 11) % 88),
-    top: 8 + ((index * 13) % 76),
-    duration: 8 + (index % 6) * 1.4,
-    delay: (index % 7) * 0.55,
-  }));
-}
 
 function applyRipple(event) {
   const button = event.currentTarget;
@@ -81,11 +53,11 @@ export default function Hero() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const heroRef = useRef(null);
-  const particles = useMemo(buildParticles, []);
-  const [videoReady, setVideoReady] = useState(false);
+  const typewriterTerms = useMemo(() => TYPEWRITER_TERMS, []);
   const [typedText, setTypedText] = useState("");
   const [termIndex, setTermIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [motionEnabled, setMotionEnabled] = useState(true);
 
   useEffect(() => {
     if (user.isAuthenticated) {
@@ -98,10 +70,10 @@ export default function Hero() {
   }, [user.isAuthenticated, user.role, navigate]);
 
   useEffect(() => {
-    const activeTerm = TYPEWRITER_TERMS[termIndex % TYPEWRITER_TERMS.length];
+    const activeTerm = typewriterTerms[termIndex % typewriterTerms.length];
     const isWordComplete = typedText === activeTerm;
     const isWordCleared = typedText.length === 0;
-    const delay = isWordComplete && !isDeleting ? 1350 : isDeleting ? 32 : 72;
+    const delay = isWordComplete && !isDeleting ? 1400 : isDeleting ? 30 : 70;
 
     const timer = window.setTimeout(() => {
       if (!isDeleting) {
@@ -117,16 +89,22 @@ export default function Hero() {
       setTypedText(nextValue);
       if (!nextValue && !isWordCleared) {
         setIsDeleting(false);
-        setTermIndex((prev) => (prev + 1) % TYPEWRITER_TERMS.length);
+        setTermIndex((prev) => (prev + 1) % typewriterTerms.length);
       }
     }, delay);
 
     return () => window.clearTimeout(timer);
-  }, [typedText, termIndex, isDeleting]);
+  }, [typedText, termIndex, isDeleting, typewriterTerms]);
 
   useEffect(() => {
     const section = heroRef.current;
     if (!section) return undefined;
+
+    if (!motionEnabled) {
+      section.style.setProperty("--pointer-x", "0");
+      section.style.setProperty("--pointer-y", "0");
+      return undefined;
+    }
 
     let frameId = null;
     const updatePointer = (clientX, clientY) => {
@@ -160,7 +138,7 @@ export default function Hero() {
       section.removeEventListener("mousemove", handleMove);
       section.removeEventListener("mouseleave", handleLeave);
     };
-  }, []);
+  }, [motionEnabled]);
 
   useEffect(() => {
     const revealed = Array.from(document.querySelectorAll("[data-home-reveal]"));
@@ -177,7 +155,7 @@ export default function Hero() {
     );
 
     revealed.forEach((node, index) => {
-      node.style.setProperty("--reveal-delay", `${Math.min(index, 8) * 90}ms`);
+      node.style.setProperty("--reveal-delay", `${Math.min(index, 10) * 120}ms`);
       observer.observe(node);
     });
 
@@ -187,6 +165,15 @@ export default function Hero() {
   useEffect(() => {
     const tiltCards = Array.from(document.querySelectorAll("[data-home-tilt]"));
 
+    if (!motionEnabled) {
+      tiltCards.forEach((card) => {
+        card.style.setProperty("--tilt-x", "0deg");
+        card.style.setProperty("--tilt-y", "0deg");
+        card.style.setProperty("--tilt-lift", "0px");
+      });
+      return undefined;
+    }
+
     const cleanups = tiltCards.map((card) => {
       let frameId = null;
 
@@ -194,8 +181,8 @@ export default function Hero() {
         const bounds = card.getBoundingClientRect();
         const relativeX = (event.clientX - bounds.left) / bounds.width;
         const relativeY = (event.clientY - bounds.top) / bounds.height;
-        const rotateY = (relativeX - 0.5) * 10;
-        const rotateX = (0.5 - relativeY) * 10;
+        const rotateY = (relativeX - 0.5) * 8;
+        const rotateX = (0.5 - relativeY) * 8;
 
         if (frameId) {
           window.cancelAnimationFrame(frameId);
@@ -204,7 +191,7 @@ export default function Hero() {
         frameId = window.requestAnimationFrame(() => {
           card.style.setProperty("--tilt-x", `${rotateX.toFixed(2)}deg`);
           card.style.setProperty("--tilt-y", `${rotateY.toFixed(2)}deg`);
-          card.style.setProperty("--tilt-lift", "-8px");
+          card.style.setProperty("--tilt-lift", "-6px");
         });
       };
 
@@ -229,18 +216,25 @@ export default function Hero() {
     return () => {
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, []);
+  }, [motionEnabled]);
 
   useEffect(() => {
     const magneticButtons = Array.from(document.querySelectorAll("[data-magnetic]"));
+
+    if (!motionEnabled) {
+      magneticButtons.forEach((button) => {
+        button.style.transform = "translate3d(0, 0, 0)";
+      });
+      return undefined;
+    }
 
     const cleanups = magneticButtons.map((button) => {
       let frameId = null;
 
       const handleMove = (event) => {
         const bounds = button.getBoundingClientRect();
-        const offsetX = ((event.clientX - bounds.left) / bounds.width - 0.5) * 16;
-        const offsetY = ((event.clientY - bounds.top) / bounds.height - 0.5) * 14;
+        const offsetX = ((event.clientX - bounds.left) / bounds.width - 0.5) * 12;
+        const offsetY = ((event.clientY - bounds.top) / bounds.height - 0.5) * 10;
 
         if (frameId) {
           window.cancelAnimationFrame(frameId);
@@ -270,7 +264,7 @@ export default function Hero() {
     return () => {
       cleanups.forEach((cleanup) => cleanup());
     };
-  }, []);
+  }, [motionEnabled]);
 
   const go = (role) => {
     const key = `gb_has_account_${role}`;
@@ -288,150 +282,70 @@ export default function Hero() {
   };
 
   return (
-    <section className="home-hero" ref={heroRef}>
+    <section className={`home-hero ${motionEnabled ? "" : "motion-disabled"}`} ref={heroRef}>
       <div className="home-hero-media" aria-hidden="true">
-        <div className="home-hero-poster-wrap">
-          <img
-            src="/assets/hero-image.png"
-            alt=""
-            className="home-hero-poster"
-          />
-          <video
-            className={`home-hero-video${videoReady ? " is-ready" : ""}`}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            onCanPlay={() => setVideoReady(true)}
-            onError={() => setVideoReady(false)}
-          >
-            <source
-              src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm"
-              type="video/webm"
-            />
-            <source
-              src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
-              type="video/mp4"
-            />
-          </video>
-        </div>
-        <div className="home-hero-gradient" />
+        <div className="home-sky-wash" />
+        <div className="home-halo home-halo-one" />
+        <div className="home-halo home-halo-two" />
+        <div className="home-halo home-halo-three" />
         <div className="home-hero-grid" />
         <div className="home-hero-noise" />
-        <div className="home-blob home-blob-one" />
-        <div className="home-blob home-blob-two" />
-        <div className="home-blob home-blob-three" />
-        {particles.map((particle) => (
-          <span
-            key={particle.id}
-            className="home-particle"
-            style={{
-              left: `${particle.left}%`,
-              top: `${particle.top}%`,
-              width: `${particle.size}px`,
-              height: `${particle.size}px`,
-              animationDuration: `${particle.duration}s`,
-              animationDelay: `${particle.delay}s`,
-            }}
-          />
-        ))}
+
+        <div className="home-floating-scene">
+          {FLOATING_PIECES.map((piece) => (
+            <span
+              key={piece.id}
+              className={`float-piece ${piece.type} ${piece.id}`}
+              style={{ "--depth": piece.depth }}
+            />
+          ))}
+        </div>
       </div>
 
-      <div className="home-hero-inner">
-        <div className="home-hero-copy glass-panel" data-home-tilt data-home-reveal>
-          <div className="home-hero-badge" data-home-reveal>
-            <Sparkles size={16} />
-            <span>#1 Platform for Creative Talent</span>
+      <div className="grain" aria-hidden="true" />
+
+      <div className="home-hero-inner main-shell">
+        <div className="home-hero-copy glass-panel reveal-up" data-home-tilt data-home-reveal>
+          <div className="home-wordmark-row">
+            <div className="home-hero-badge">
+              <Sparkles size={14} />
+              <span>GigBridge Curation</span>
+            </div>
+            <button
+              type="button"
+              className="home-motion-toggle"
+              onClick={() => setMotionEnabled((prev) => !prev)}
+            >
+              {motionEnabled ? "Motion On" : "Motion Off"}
+            </button>
           </div>
 
-          <h1 className="home-hero-title" data-home-reveal>
-            Hire visionary artists for
-            <span className="home-title-accent"> unforgettable creative work.</span>
-          </h1>
+          <div className="home-hero-copy-stack">
+            <p className="home-kicker" data-home-reveal>
+              {HERO_CONTENT.kicker}
+            </p>
 
-          <p className="home-hero-subtitle" data-home-reveal>
-            Connect with premium illustrators, musicians, painters, photographers,
-            and performers through a cinematic discovery experience built for modern creative teams.
-          </p>
+            <h1 className="home-hero-title" data-home-reveal>
+              {HERO_CONTENT.title}
+              <span className="home-title-accent"> {HERO_CONTENT.titleAccent}</span>
+            </h1>
 
-          <div className="home-hero-search" data-home-reveal>
-            <Search size={18} />
-            <span className="home-search-prefix">Discover</span>
-            <span className="home-search-typewriter">{typedText}</span>
-            <span className="home-search-caret" />
+            <p className="home-hero-subtitle" data-home-reveal>
+              {HERO_CONTENT.subtitle}
+            </p>
           </div>
-
           <div className="home-hero-buttons" data-home-reveal>
             <button className="home-primary-btn" data-magnetic onClick={handleGo("client")}>
-              <span>Hire a Freelancer</span>
+              <span>{HERO_CONTENT.primaryButtonText}</span>
               <ArrowRight size={18} />
             </button>
             <button className="home-secondary-btn" data-magnetic onClick={handleGo("freelancer")}>
               <Play size={18} />
-              <span>Become an Artist</span>
+              <span>{HERO_CONTENT.secondaryButtonText}</span>
             </button>
           </div>
-
-          <div className="home-proof-pills" data-home-reveal>
-            {PROOF_POINTS.map((item) => (
-              <span key={item} className="home-proof-pill">
-                <Star size={14} />
-                {item}
-              </span>
-            ))}
-          </div>
         </div>
 
-        <div className="home-hero-stage">
-          <div className="home-stage-card glass-panel" data-home-tilt data-home-reveal>
-            <div className="home-stage-header">
-              <div className="home-stage-header-pill">
-                <Sparkles size={14} />
-                <span>Creative Match Feed</span>
-              </div>
-              <div className="home-stage-header-meta">Realtime discovery</div>
-            </div>
-
-            <div className="home-stage-grid">
-              {SHOWCASE_CARDS.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <article key={card.title} className="home-stage-item">
-                    <div className="home-stage-item-visual">
-                      <img src={card.image} alt={`${card.title} illustration`} />
-                    </div>
-                    <div className="home-stage-item-copy">
-                      <span className="home-stage-item-icon">
-                        <Icon size={16} />
-                      </span>
-                      <div>
-                        <h3>{card.title}</h3>
-                        <p>{card.subtitle}</p>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="home-float-card home-float-card-top glass-panel" data-home-tilt data-home-reveal>
-            <div className="home-float-label">AI Search</div>
-            <p>Smart artist ranking with faster matching for style, availability, and verified trust.</p>
-          </div>
-
-          <div className="home-float-card home-float-card-bottom glass-panel" data-home-tilt data-home-reveal>
-            <div className="home-float-avatars">
-              <img src={painterArt} alt="Painter artwork" />
-              <img src={musicianArt} alt="Musician artwork" />
-            </div>
-            <div>
-              <div className="home-float-label">Artist-ready workflow</div>
-              <p>From discovery to payment, every step is designed to feel premium and frictionless.</p>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="home-scroll-indicator" data-home-reveal>

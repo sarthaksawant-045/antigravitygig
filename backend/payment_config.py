@@ -22,9 +22,22 @@ def _load_local_env():
 
 _load_local_env()
 
+# Legacy local-development fallback values already used elsewhere in the app.
+# This keeps the modular payment routes aligned with the existing working setup.
+DEFAULT_RAZORPAY_KEY_ID = "rzp_test_SUJ9gz60CfdMWX"
+DEFAULT_RAZORPAY_KEY_SECRET = "KiHXGap8Xly3BH7YRTi6Da0D"
+
 # Razorpay (set via env in production)
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_KEY_ID = (
+    os.getenv("RAZORPAY_KEY_ID")
+    or os.getenv("RAZORPAY_TEST_KEY_ID")
+    or DEFAULT_RAZORPAY_KEY_ID
+)
+RAZORPAY_KEY_SECRET = (
+    os.getenv("RAZORPAY_KEY_SECRET")
+    or os.getenv("RAZORPAY_TEST_KEY_SECRET")
+    or DEFAULT_RAZORPAY_KEY_SECRET
+)
 
 # Cancellation refund rules (days/hours before event)
 CANCELLATION_FULL_REFUND_DAYS = 7

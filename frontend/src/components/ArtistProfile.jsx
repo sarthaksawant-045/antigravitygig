@@ -99,8 +99,7 @@ export default function ArtistProfile() {
             rating: parseFloat(data.rating) || 0,
             reviews: data.rating_count || 0,
             description: data.bio || "",
-            image: data.profile_image ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name || "A")}&background=random&size=256`,
+            image: data.profile_image || "",
             experience: data.experience ? `${data.experience} Years` : "",
             dob: data.dob || "",
             portfolio: data.skills
@@ -223,7 +222,24 @@ export default function ArtistProfile() {
         <button className="ap-back-btn" onClick={() => navigate(-1)}>← Back</button>
         <div className="ap-header-card">
           <div className="ap-avatar-box">
-            <img src={profile.image} alt={profile.name} className="ap-avatar" />
+            {profile.image ? (
+              <img src={profile.image} alt={profile.name} className="ap-avatar" />
+            ) : (
+              <div
+                className="ap-avatar"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "#3b82f6",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: "40px",
+                }}
+              >
+                {(profile.name || "A").charAt(0).toUpperCase()}
+              </div>
+            )}
             <span className="ap-status-badge">Available {profile.availability}</span>
           </div>
           <div className="ap-header-details">

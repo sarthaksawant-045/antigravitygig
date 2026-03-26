@@ -65,6 +65,12 @@ export default function FreelancerProfilePage() {
             price_per_hour: data.hourly_rate || 0,
             price_per_person: data.per_person_rate || 0,
             price_per_event: data.fixed_price || data.starting_price || data.min_budget || 0,
+            hourly_rate: data.hourly_rate || 0,
+            per_person_rate: data.per_person_rate || 0,
+            starting_price: data.starting_price || 0,
+            work_description: data.work_description || "",
+            services_included: data.services_included || "",
+            dob: data.dob || "",
             bio: data.bio || "",
             category: data.category || "",
             skills: data.skills ? (typeof data.skills === 'string' ? data.skills.split(',').map(s => s.trim()) : data.skills) : [],
@@ -103,16 +109,47 @@ export default function FreelancerProfilePage() {
 
   const handleUpdateProfile = async (updatedData) => {
     try {
-      const payload = {
-        freelancer_id: user.id,
-        ...updatedData,
-        // Ensure availability status is correctly mapped if needed
-        availability_status: updatedData.availability ? "AVAILABLE" : "UNAVAILABLE"
-      };
+      const mergedProfile = { ...profile, ...updatedData };
+      const payload = new FormData();
+      payload.append("freelancer_id", user.id);
+      payload.append("title", mergedProfile.title || mergedProfile.category || "");
+      payload.append("skills", Array.isArray(mergedProfile.skills) ? mergedProfile.skills.join(", ") : (mergedProfile.skills || ""));
+      payload.append("experience_years", mergedProfile.experience || 0);
+      payload.append("bio", mergedProfile.bio || "");
+      payload.append("category", mergedProfile.category || "");
+      payload.append("location", mergedProfile.location || "");
+      payload.append("dob", mergedProfile.dob || "");
+      payload.append("phone", mergedProfile.phone || "");
+      payload.append("availability_status", mergedProfile.availability ? "AVAILABLE" : "BUSY");
+
+      if (updatedData.profileImageFile) {
+        payload.append("profile_image", updatedData.profileImageFile);
+      }
+
+      if (mergedProfile.hourlyRate || mergedProfile.hourly_rate) {
+        payload.append("hourly_rate", mergedProfile.hourlyRate || mergedProfile.hourly_rate);
+      }
+      if (mergedProfile.per_person_rate || mergedProfile.price_per_person) {
+        payload.append("per_person_rate", mergedProfile.per_person_rate || mergedProfile.price_per_person);
+      }
+      if (mergedProfile.starting_price || mergedProfile.price_per_event) {
+        payload.append("starting_price", mergedProfile.starting_price || mergedProfile.price_per_event);
+      }
+      if (mergedProfile.work_description) {
+        payload.append("work_description", mergedProfile.work_description);
+      }
+      if (mergedProfile.services_included) {
+        payload.append("services_included", mergedProfile.services_included);
+      }
       
       const res = await freelancerService.createProfile(payload);
       if (res.success) {
-        setProfile(prev => ({ ...prev, ...updatedData }));
+        setProfile(prev => ({
+          ...prev,
+          ...updatedData,
+          ...mergedProfile,
+          profileImage: res.profile_image || updatedData.profileImage || prev.profileImage,
+        }));
         setIsEditModalOpen(false);
       } else {
         alert(res.msg || "Failed to update profile");

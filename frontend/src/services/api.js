@@ -45,10 +45,19 @@ async function handleResponse(response) {
 }
 
 async function request(endpoint, options = {}) {
+  const isFormData = options.body instanceof FormData;
+  const baseHeaders = isFormData
+    ? {
+        'Accept': 'application/json; charset=utf-8',
+      }
+    : {
+        'Accept': 'application/json; charset=utf-8',
+        'Content-Type': 'application/json; charset=utf-8',
+      };
+
   const config = {
     headers: {
-      'Accept': 'application/json; charset=utf-8',
-      'Content-Type': 'application/json; charset=utf-8',
+      ...baseHeaders,
       ...options.headers,
     },
     ...options,
@@ -87,8 +96,8 @@ async function request(endpoint, options = {}) {
 
 export const api = {
   get: (endpoint, options = {}) => request(endpoint, { ...options, method: 'GET' }),
-  post: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'POST', body: JSON.stringify(data) }),
-  put: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'PUT', body: JSON.stringify(data) }),
+  post: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'POST', body: data instanceof FormData ? data : JSON.stringify(data) }),
+  put: (endpoint, data, options = {}) => request(endpoint, { ...options, method: 'PUT', body: data instanceof FormData ? data : JSON.stringify(data) }),
   delete: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
 };
 

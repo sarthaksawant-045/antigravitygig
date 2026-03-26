@@ -1,105 +1,214 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  Briefcase,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  FileText,
+  FolderKanban,
+  MapPin,
+  Search,
+  User,
+  XCircle,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { freelancerService, clientService } from "../services";
 import socketService from "../services/socketService";
 import "./opportunities.css";
 
-// ─── Utility: format budget ────────────────────────────────────────────────
 function fmt(v) {
   if (!v && v !== 0) return "—";
   return `₹${Number(v).toLocaleString("en-IN")}`;
 }
 
-// ─── HireRequestCard ──────────────────────────────────────────────────────
+function formatShortDate(value) {
+  if (!value) return "";
+  return new Date(value * 1000).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function getRequestStatusMeta(status) {
+  switch (status) {
+    case "ACCEPTED":
+      return {
+        cardClass: "is-accepted",
+        badgeClass: "is-accepted",
+        icon: CheckCircle2,
+        label: "Accepted",
+      };
+    case "REJECTED":
+      return {
+        cardClass: "is-rejected",
+        badgeClass: "is-rejected",
+        icon: XCircle,
+        label: "Rejected",
+      };
+    case "COMPLETED":
+      return {
+        cardClass: "is-completed",
+        badgeClass: "is-completed",
+        icon: CheckCircle2,
+        label: "Completed",
+      };
+    case "PENDING":
+      return {
+        cardClass: "is-pending",
+        badgeClass: "is-pending",
+        icon: Briefcase,
+        label: "Pending",
+      };
+    case "COUNTERED":
+      return {
+        cardClass: "is-countered",
+        badgeClass: "is-countered",
+        icon: FileText,
+        label: "Countered",
+      };
+    default:
+      return {
+        cardClass: "is-default",
+        badgeClass: "is-default",
+        icon: Briefcase,
+        label: status || "Updated",
+      };
+  }
+}
+
 function HireRequestCard({ req, onRespond }) {
-  const [open, setOpen] = useState(false);
-  const statusColor = {
-    PENDING: "#f59e0b", ACCEPTED: "#16a34a", REJECTED: "#dc2626",
-    COUNTERED: "#7c3aed",
-  }[req.status] || "#64748b";
+  const statusMeta = getRequestStatusMeta(req.status);
+  const StatusIcon = statusMeta.icon;
 
   return (
-    <article className="opp-card" style={{ borderLeft: `4px solid ${statusColor}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h3 style={{ margin: 0 }}>{req.job_title || "Hire Request"}</h3>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "0.9rem" }}>
-            From: {req.client_name || "Client"} · {fmt(req.proposed_budget)}
-          </p>
+    <article className={`opp-card ${statusMeta.cardClass}`}>
+      <div className="opp-card-header-row">
+        <div className="opp-title-group">
+          <div className="opp-card-icon">
+            <Briefcase size={18} />
+          </div>
+          <div className="opp-title-copy">
+            <h3>{req.job_title || "Hire Request"}</h3>
+          </div>
         </div>
-        <span style={{ background: statusColor, color: "white", padding: "2px 10px", borderRadius: "12px", fontSize: "0.8rem", fontWeight: 600 }}>
-          {req.status}
+
+        <span className={`opp-status-badge ${statusMeta.badgeClass}`}>
+          <StatusIcon size={14} />
+          <span>{statusMeta.label}</span>
         </span>
       </div>
-      {req.note && <p style={{ marginTop: "0.5rem", color: "#475569", fontSize: "0.9rem" }}>{req.note}</p>}
-      {req.status === "ACCEPTED" && (
-        <p style={{ marginTop: "0.75rem", color: "#16a34a", fontSize: "0.85rem", fontWeight: 600 }}>
-          ✓ Accepted. Awaiting Client payment to begin the gig.
-        </p>
+
+      <div className="opp-meta-row">
+        <span className="opp-meta-item">
+          <User size={14} />
+          <span>{req.client_name || "Client"}</span>
+        </span>
+        <span className="opp-meta-item opp-meta-budget">
+          <CircleDollarSign size={14} />
+          <span>{fmt(req.proposed_budget)}</span>
+        </span>
+      </div>
+
+      {(req.note || req.status === "ACCEPTED") && (
+        <div className="opp-description">
+          {req.note ? (
+            <p>{req.note}</p>
+          ) : (
+            <p>Accepted. Awaiting client payment to begin the gig.</p>
+          )}
+        </div>
       )}
-      {req.created_at && (
-        <p style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "0.25rem" }}>
-          Received: {new Date(req.created_at * 1000).toLocaleDateString()}
-        </p>
-      )}
+
+      <div className="opp-footer-row">
+        {req.created_at ? (
+          <span className="opp-footer-item">
+            <CalendarDays size={14} />
+            <span>Received {formatShortDate(req.created_at)}</span>
+          </span>
+        ) : (
+          <span className="opp-footer-item">
+            <CalendarDays size={14} />
+            <span>Recently received</span>
+          </span>
+        )}
+      </div>
+
       {req.status === "PENDING" && (
-        <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem" }}>
-          <button
-            style={{ padding: "6px 18px", background: "#16a34a", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
-            onClick={() => onRespond(req.request_id, "ACCEPT")}
-          >Accept</button>
-          <button
-            style={{ padding: "6px 18px", background: "#dc2626", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: 600 }}
-            onClick={() => onRespond(req.request_id, "REJECT")}
-          >Decline</button>
+        <div className="opp-actions">
+          <button className="opp-action-btn opp-action-primary" onClick={() => onRespond(req.request_id, "ACCEPT")}>
+            Accept
+          </button>
+          <button className="opp-action-btn opp-action-danger" onClick={() => onRespond(req.request_id, "REJECT")}>
+            Decline
+          </button>
         </div>
       )}
     </article>
   );
 }
 
-// ─── ProjectCard (browse available projects) ───────────────────────────────
 function ProjectCard({ project, onApply }) {
   return (
-    <article className="opp-card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <h3 style={{ margin: 0 }}>{project.title || project.category}</h3>
-          <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "0.9rem" }}>
-            📂 {project.category} · 📍 {project.location || "Remote"} · 💰 {project.budget_type || "Budget TBD"}
-          </p>
+    <article className="opp-card is-project">
+      <div className="opp-card-header-row">
+        <div className="opp-title-group">
+          <div className="opp-card-icon">
+            <FolderKanban size={18} />
+          </div>
+          <div className="opp-title-copy">
+            <h3>{project.title || project.category}</h3>
+          </div>
         </div>
+
         {project.has_applied && (
-          <span style={{ background: "#16a34a", color: "white", padding: "2px 10px", borderRadius: "12px", fontSize: "0.80rem", fontWeight: 600 }}>
-            APPLIED
+          <span className="opp-status-badge is-accepted">
+            <CheckCircle2 size={14} />
+            <span>Applied</span>
           </span>
         )}
       </div>
-      
+
+      <div className="opp-meta-row opp-meta-row-wrap">
+        <span className="opp-meta-item">
+          <User size={14} />
+          <span>{project.client_name || "Client"}</span>
+        </span>
+        <span className="opp-meta-item opp-meta-budget">
+          <CircleDollarSign size={14} />
+          <span>{project.budget_type || "Budget TBD"}</span>
+        </span>
+        <span className="opp-meta-item">
+          <MapPin size={14} />
+          <span>{project.location || "Remote"}</span>
+        </span>
+      </div>
+
       {project.description && (
-        <p style={{ marginTop: "0.5rem", color: "#475569", fontSize: "0.9rem", lineHeight: 1.5 }}>
-          {project.description.slice(0, 200)}{project.description.length > 200 ? "…" : ""}
-        </p>
-      )}
-      
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
-        {project.created_at && (
-          <p style={{ fontSize: "0.75rem", color: "#94a3b8", margin: 0 }}>
-            Posted: {new Date(project.created_at * 1000).toLocaleDateString()}
+        <div className="opp-description">
+          <p>
+            {project.description.slice(0, 200)}
+            {project.description.length > 200 ? "…" : ""}
           </p>
+        </div>
+      )}
+
+      <div className="opp-footer-row">
+        {project.created_at ? (
+          <span className="opp-footer-item">
+            <CalendarDays size={14} />
+            <span>Posted {formatShortDate(project.created_at)}</span>
+          </span>
+        ) : (
+          <span className="opp-footer-item">
+            <CalendarDays size={14} />
+            <span>Recently posted</span>
+          </span>
         )}
-        
+
         {!project.has_applied && (
-          <button 
-            className="btn-apply"
-            onClick={() => onApply(project)}
-            style={{ 
-              padding: "6px 20px", background: "#3b82f6", color: "white", 
-              border: "none", borderRadius: "6px", cursor: "pointer", 
-              fontWeight: 600, fontSize: "0.85rem"
-            }}
-          >
+          <button className="opp-action-btn opp-action-primary" onClick={() => onApply(project)}>
             Apply Now
           </button>
         )}
@@ -108,7 +217,6 @@ function ProjectCard({ project, onApply }) {
   );
 }
 
-// ─── ApplyModal ─────────────────────────────────────────────────────────────
 function ApplyModal({ project, onClose, onSubmit, submitting, errorMessage }) {
   const [proposal, setProposal] = useState("");
   const [bid, setBid] = useState("");
@@ -120,54 +228,42 @@ function ApplyModal({ project, onClose, onSubmit, submitting, errorMessage }) {
   };
 
   return (
-    <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div className="modal-content" style={{ background: "white", padding: "2rem", borderRadius: "12px", width: "100%", maxWidth: "500px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" }}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Apply for {project.title}</h2>
-        <p style={{ color: "#64748b", marginBottom: "1.5rem", fontSize: "0.9rem" }}>Explain why you're the best fit and suggest your bid.</p>
-        
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {errorMessage && (
-            <div style={{ background: "#fef2f2", color: "#dc2626", padding: "10px 12px", borderRadius: "8px", fontSize: "0.9rem" }}>
-              {errorMessage}
-            </div>
-          )}
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, fontSize: "0.9rem" }}>Your Proposal</label>
-            <textarea 
+    <div className="opp-modal-overlay">
+      <div className="opp-modal-card">
+        <div className="opp-modal-header">
+          <h2>Apply for {project.title}</h2>
+          <p>Explain why you're the best fit and suggest your bid.</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="opp-modal-form">
+          {errorMessage && <div className="opp-modal-error">{errorMessage}</div>}
+
+          <div className="opp-field">
+            <label>Your Proposal</label>
+            <textarea
               value={proposal}
-              onChange={e => setProposal(e.target.value)}
+              onChange={(e) => setProposal(e.target.value)}
               placeholder="Describe your approach, relevant experience..."
-              style={{ width: "100%", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", minHeight: "120px", fontSize: "0.95rem", boxSizing: "border-box" }}
               required
             />
           </div>
-          
-          <div>
-            <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: 600, fontSize: "0.9rem" }}>Bid Amount (₹)</label>
-            <input 
+
+          <div className="opp-field">
+            <label>Bid Amount (₹)</label>
+            <input
               type="number"
               value={bid}
-              onChange={e => setBid(e.target.value)}
+              onChange={(e) => setBid(e.target.value)}
               placeholder="e.g. 5000"
-              style={{ width: "100%", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", boxSizing: "border-box" }}
               required
             />
           </div>
-          
-          <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-            <button 
-              type="submit"
-              disabled={submitting}
-              style={{ flex: 1, padding: "12px", background: "#3b82f6", color: "white", border: "none", borderRadius: "8px", fontWeight: 700, cursor: "pointer", opacity: submitting ? 0.7 : 1 }}
-            >
+
+          <div className="opp-modal-actions">
+            <button type="submit" disabled={submitting} className="opp-action-btn opp-action-primary opp-modal-submit">
               {submitting ? "Submitting..." : "Submit Application"}
             </button>
-            <button 
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              style={{ padding: "12px 20px", background: "#f1f5f9", color: "#475569", border: "none", borderRadius: "8px", fontWeight: 600, cursor: "pointer" }}
-            >
+            <button type="button" onClick={onClose} disabled={submitting} className="opp-action-btn opp-action-secondary">
               Cancel
             </button>
           </div>
@@ -179,26 +275,26 @@ function ApplyModal({ project, onClose, onSubmit, submitting, errorMessage }) {
 
 function ApplySuccessModal({ projectTitle }) {
   return (
-    <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
-      <div className="modal-content" style={{ background: "white", padding: "2rem", borderRadius: "12px", width: "100%", maxWidth: "460px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", textAlign: "center" }}>
-        <h2 style={{ marginBottom: "0.5rem" }}>Application Sent Successfully</h2>
-        <p style={{ color: "#64748b", margin: 0 }}>
+    <div className="opp-modal-overlay">
+      <div className="opp-modal-card opp-modal-card-success">
+        <div className="opp-success-icon">
+          <CheckCircle2 size={28} />
+        </div>
+        <h2>Application Sent Successfully</h2>
+        <p>
           {projectTitle ? `Your application for ${projectTitle} was submitted.` : "Your application was submitted."}
         </p>
-        <p style={{ color: "#94a3b8", marginTop: "0.75rem", fontSize: "0.9rem" }}>
-          Redirecting to your dashboard...
-        </p>
+        <span>Redirecting to your dashboard...</span>
       </div>
     </div>
   );
 }
 
-// ─── MAIN PAGE ─────────────────────────────────────────────────────────────
 export default function OpportunitiesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState("hireRequests"); // 'hireRequests' | 'projects'
+  const [tab, setTab] = useState("hireRequests");
   const [hireRequests, setHireRequests] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loadingHire, setLoadingHire] = useState(true);
@@ -212,13 +308,13 @@ export default function OpportunitiesPage() {
   const [applyError, setApplyError] = useState("");
   const [applySuccess, setApplySuccess] = useState(null);
 
-  // Load hire requests for this freelancer
   const loadHireRequests = useCallback(() => {
     if (!user?.id) return;
     setLoadingHire(true);
     setHireError("");
-    freelancerService.getHireInbox(user.id)
-      .then(res => {
+    freelancerService
+      .getHireInbox(user.id)
+      .then((res) => {
         const reqs = res.requests || [];
         setHireRequests(reqs);
       })
@@ -231,9 +327,7 @@ export default function OpportunitiesPage() {
   }, [loadHireRequests]);
 
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [budgetFilter, setBudgetFilter] = useState("");
 
-  // Load available projects - dynamic based on search
   const loadProjects = useCallback(() => {
     setLoadingProjects(true);
     setProjectError("");
@@ -245,8 +339,16 @@ export default function OpportunitiesPage() {
       ? freelancerService.getApplications(user.id)
       : Promise.resolve({ applications: [] });
 
-    Promise.all([projectsPromise, applicationsPromise])
-      .then(([projectRes, applicationRes]) => {
+    Promise.allSettled([projectsPromise, applicationsPromise])
+      .then(([projectResult, applicationResult]) => {
+        if (projectResult.status !== "fulfilled") {
+          throw projectResult.reason;
+        }
+
+        const projectRes = projectResult.value || {};
+        const applicationRes =
+          applicationResult.status === "fulfilled" ? applicationResult.value || {} : { applications: [] };
+
         const fetchedProjects = projectRes.projects || [];
         const applications = applicationRes.applications || [];
         const normalizedSearch = search.trim().toLowerCase();
@@ -363,19 +465,22 @@ export default function OpportunitiesPage() {
     return () => clearTimeout(timer);
   }, [applySuccess, navigate]);
 
-  const handleRespond = useCallback(async (requestId, action) => {
-    if (!user?.id) return;
-    try {
-      await freelancerService.respondToHire(user.id, requestId, action);
-      loadHireRequests();
-    } catch (err) {
-      alert(err.message || "Failed to respond.");
-    }
-  }, [user?.id, loadHireRequests]);
+  const handleRespond = useCallback(
+    async (requestId, action) => {
+      if (!user?.id) return;
+      try {
+        await freelancerService.respondToHire(user.id, requestId, action);
+        loadHireRequests();
+      } catch (err) {
+        alert(err.message || "Failed to respond.");
+      }
+    },
+    [user?.id, loadHireRequests]
+  );
 
   const handleApplySubmit = async (projectId, proposal, bidAmount) => {
     if (!user?.id) return;
-    const targetProject = projects.find(p => p.id === projectId) || selectedProject;
+    const targetProject = projects.find((p) => p.id === projectId) || selectedProject;
     if (targetProject?.has_applied) {
       setApplyError("You have already applied to this project.");
       return;
@@ -417,17 +522,19 @@ export default function OpportunitiesPage() {
       if (err?.data?.application) {
         const application = err.data.application;
         const project = application.project || targetProject || {};
-        setProjects((prev) => prev.map((item) => (
-          item.id === projectId
-            ? {
-                ...item,
-                has_applied: true,
-                application_id: application.application_id,
-                application_status: application.status || "PENDING",
-                client_name: project.client_name || item.client_name || "",
-              }
-            : item
-        )));
+        setProjects((prev) =>
+          prev.map((item) =>
+            item.id === projectId
+              ? {
+                  ...item,
+                  has_applied: true,
+                  application_id: application.application_id,
+                  application_status: application.status || "PENDING",
+                  client_name: project.client_name || item.client_name || "",
+                }
+              : item
+          )
+        );
         setSelectedProject(null);
       }
       setApplyError(err.message || "Failed to submit application.");
@@ -436,128 +543,135 @@ export default function OpportunitiesPage() {
     }
   };
 
-  // Client-side filtering ONLY for hire requests
-  const filteredHire = hireRequests.filter(r =>
-    (r.job_title || "").toLowerCase().includes(search.toLowerCase()) ||
-    (r.client_name || "").toLowerCase().includes(search.toLowerCase())
+  const filteredHire = hireRequests.filter(
+    (r) =>
+      (r.job_title || "").toLowerCase().includes(search.toLowerCase()) ||
+      (r.client_name || "").toLowerCase().includes(search.toLowerCase())
   );
-  
-  // Projects are already server-filtered by search, now apply optional UI filters
-  const filteredProjects = projects.filter(p => {
+
+  const filteredProjects = projects.filter((p) => {
     if (categoryFilter && p.category !== categoryFilter) return false;
-    if (budgetFilter && p.budget_type !== budgetFilter) return false;
     return true;
   });
 
+  const pendingHireCount = hireRequests.filter((r) => r.status === "PENDING").length;
+
   return (
-    <main style={{ maxWidth: "900px", margin: "0 auto", padding: "2rem 1rem" }}>
-      <h1 style={{ marginBottom: "0.25rem" }}>Opportunities</h1>
-      <p style={{ color: "#64748b", marginBottom: "1.5rem" }}>
-        Browse hire requests and available projects in your area.
-      </p>
+    <main className="opportunities-shell">
+      <div className="opportunities-page">
+        <header className="opps-header">
+          <h1>Opportunities</h1>
+          <p>Browse hire requests and available projects in your area.</p>
+        </header>
 
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-        {[{ id: "hireRequests", label: "Hire Requests" }, { id: "projects", label: "Available Projects" }].map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              padding: "8px 20px", borderRadius: "20px", border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: "0.9rem",
-              background: tab === t.id ? "#3b82f6" : "#f1f5f9",
-              color: tab === t.id ? "white" : "#475569",
-              transition: "all 0.2s",
-            }}
-          >
-            {t.label}
-            {t.id === "hireRequests" && hireRequests.length > 0 && (
-              <span style={{ marginLeft: "6px", background: "rgba(255,255,255,0.3)", padding: "0 7px", borderRadius: "10px", fontSize: "0.8rem" }}>
-                {hireRequests.filter(r => r.status === "PENDING").length}
-              </span>
+        <div className="opps-tabs" role="tablist" aria-label="Opportunity sections">
+          {[
+            { id: "hireRequests", label: "Hire Requests" },
+            { id: "projects", label: "Available Projects" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`opps-tab ${tab === t.id ? "active" : ""}`}
+            >
+              <span>{t.label}</span>
+              {t.id === "hireRequests" && hireRequests.length > 0 && (
+                <span className={`tab-badge ${tab === t.id ? "tab-badge-active" : ""}`}>{pendingHireCount}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <div className="opps-toolbar">
+          <label className="opps-search">
+            <Search size={18} className="opps-search-icon" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${tab === "hireRequests" ? "hire requests" : "projects"}...`}
+            />
+          </label>
+
+          {tab === "projects" && (
+            <div className="opps-filters">
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="opps-select">
+                <option value="">All Categories</option>
+                {[
+                  "Photographer",
+                  "Videographer",
+                  "DJ",
+                  "Singer",
+                  "Dancer",
+                  "Anchor",
+                  "Makeup Artist",
+                  "Mehendi Artist",
+                  "Decorator",
+                  "Wedding Planner",
+                  "Choreographer",
+                  "Band / Live Music",
+                  "Magician / Entertainer",
+                  "Artist",
+                  "Event Organizer",
+                ].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {tab === "hireRequests" && (
+          <section className="opps-list">
+            {loadingHire ? (
+              <p className="opps-feedback">Loading hire requests...</p>
+            ) : hireError ? (
+              <p className="opps-feedback is-error">{hireError}</p>
+            ) : filteredHire.length === 0 ? (
+              <div className="opps-empty">
+                <div className="opps-empty-icon">
+                  <Briefcase size={32} />
+                </div>
+                <p>No hire requests yet. Make sure your profile is complete!</p>
+              </div>
+            ) : (
+              filteredHire.map((r) => <HireRequestCard key={r.request_id} req={r} onRespond={handleRespond} />)
             )}
-          </button>
-        ))}
-      </div>
+          </section>
+        )}
 
-      <div style={{ display: "flex", gap: "10px", marginBottom: "1.25rem", flexWrap: "wrap" }}>
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder={`Search ${tab === "hireRequests" ? "hire requests" : "projects"}…`}
-          style={{ flex: "1 1 300px", padding: "10px 16px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", boxSizing: "border-box" }}
-        />
         {tab === "projects" && (
-          <>
-            <select
-              value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value)}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", background: "white", cursor: "pointer" }}
-            >
-              <option value="">All Categories</option>
-              {["Photographer","Videographer","DJ","Singer","Dancer","Anchor","Makeup Artist","Mehendi Artist","Decorator","Wedding Planner","Choreographer","Band / Live Music","Magician / Entertainer","Artist","Event Organizer"].map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <select
-              value={budgetFilter}
-              onChange={e => setBudgetFilter(e.target.value)}
-              style={{ padding: "10px", border: "1px solid #ddd", borderRadius: "8px", fontSize: "0.95rem", background: "white", cursor: "pointer" }}
-            >
-              <option value="">All Budgets</option>
-              <option value="hourly">Hourly Rate</option>
-              <option value="fixed">Fixed Price</option>
-            </select>
-          </>
+          <section className="opps-list">
+            {loadingProjects ? (
+              <p className="opps-feedback">Loading projects...</p>
+            ) : projectError ? (
+              <p className="opps-feedback is-error">{projectError}</p>
+            ) : filteredProjects.length === 0 ? (
+              <div className="opps-empty">
+                <div className="opps-empty-icon">
+                  <FolderKanban size={32} />
+                </div>
+                <p>No open projects available right now.</p>
+              </div>
+            ) : (
+              filteredProjects.map((p) => (
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  onApply={(project) => {
+                    setApplyError("");
+                    setSelectedProject(project);
+                  }}
+                />
+              ))
+            )}
+          </section>
         )}
       </div>
 
-      {tab === "hireRequests" && (
-        <section>
-          {loadingHire ? (
-            <p style={{ textAlign: "center", color: "#94a3b8" }}>Loading hire requests…</p>
-          ) : hireError ? (
-            <p style={{ color: "#dc2626", textAlign: "center" }}>{hireError}</p>
-          ) : filteredHire.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "3rem 0", color: "#64748b" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📬</div>
-              <p>No hire requests yet. Make sure your profile is complete!</p>
-            </div>
-          ) : (
-            filteredHire.map(r => (
-              <HireRequestCard key={r.request_id} req={r} onRespond={handleRespond} />
-            ))
-          )}
-        </section>
-      )}
-
-      {tab === "projects" && (
-        <section>
-          {loadingProjects ? (
-            <p style={{ textAlign: "center", color: "#94a3b8" }}>Loading projects…</p>
-          ) : projectError ? (
-            <p style={{ color: "#dc2626", textAlign: "center" }}>{projectError}</p>
-          ) : filteredProjects.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "3rem 0", color: "#64748b" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📋</div>
-              <p>No open projects available right now.</p>
-            </div>
-          ) : (
-            filteredProjects.map(p => (
-              <ProjectCard 
-                key={p.id} 
-                project={p} 
-                onApply={(project) => {
-                  setApplyError("");
-                  setSelectedProject(project);
-                }}
-              />
-            ))
-          )}
-        </section>
-      )}
-
       {selectedProject && (
-        <ApplyModal 
+        <ApplyModal
           project={selectedProject}
           onClose={() => {
             setApplyError("");
