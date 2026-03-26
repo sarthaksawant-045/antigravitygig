@@ -84,13 +84,16 @@ export const clientService = {
   },
 
   // NEW: Fetch all active projects (for freelancer browsing)
-  getAllProjects: async () => {
-    return await api.get('/projects/all');
+  getAllProjects: async (freelancerId = null) => {
+    const url = freelancerId ? `/projects/all?freelancer_id=${freelancerId}` : '/projects/all';
+    return await api.get(url);
   },
 
   // NEW: Search projects by keyword
-  searchProjects: async (query) => {
-    return await api.get(`/projects/search?q=${encodeURIComponent(query)}`);
+  searchProjects: async (query, freelancerId = null) => {
+    let url = `/projects/search?q=${encodeURIComponent(query)}`;
+    if (freelancerId) url += `&freelancer_id=${freelancerId}`;
+    return await api.get(url);
   },
 
   // ==========================================
@@ -129,7 +132,7 @@ export const clientService = {
   },
 
   getProjectApplicants: async (clientId, projectId) => {
-    return await api.get(`/client/projects/applicants?client_id=${clientId}&project_id=${projectId}`);
+    return await api.get(`/applications/project/${projectId}?client_id=${clientId}`);
   },
 
   acceptApplication: async (clientId, projectId, applicationId) => {
@@ -137,6 +140,18 @@ export const clientService = {
       client_id: clientId,
       project_id: projectId,
       application_id: applicationId
+    });
+  },
+
+  // NEW: Project Lifecycle (Contracts)
+  getContractProjects: async (clientId) => {
+    return await api.get(`/projects/list?user_id=${clientId}&role=client`);
+  },
+
+  verifyProject: async (clientId, projectId) => {
+    return await api.post('/project/verify', {
+      client_id: clientId,
+      project_id: projectId
     });
   },
 };

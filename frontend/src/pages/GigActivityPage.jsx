@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import GigActivityCard from '../components/GigActivityCard';
@@ -7,54 +8,53 @@ import MonthlyStatsSection from '../components/MonthlyStatsSection';
 import AddGigModal from '../components/AddGigModal';
 import EmptyStateCard from '../components/EmptyStateCard';
 import { useAuth } from '../context/AuthContext';
-import { freelancerService } from '../services';
+import { freelancerService, artistService } from '../services';
 import './dashboard.css';
 import './gigActivity.css';
 
 export default function GigActivityPage() {
   const { user } = useAuth();
+  const { id } = useParams();
   const [active, setActive] = useState("projects");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [gigs, setGigs] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch real hire data from backend
+  // Fetch real project data from backend
   useEffect(() => {
     if (!user?.id) return;
     setLoading(true);
-    freelancerService.getHireInbox(user.id)
+    artistService.getContractProjects(user.id)
       .then(res => {
-        const requests = res.requests || [];
-        // Map hire requests to gig activity format
-        const mapped = requests.map(r => {
-          let status = "Upcoming";
-          if (r.status === "ACCEPTED") status = "Ongoing";
-          else if (r.status === "REJECTED") status = "Cancelled";
-          else if (r.status === "COMPLETED") status = "Completed";
-          else if (r.status === "PENDING") status = "Upcoming";
-
+        const projects = res.projects || [];
+        const mapped = projects.map(p => {
           return {
-            id: r.request_id,
-            freelancer_id: r.freelancer_id,
-            title: r.job_title || `Gig from ${r.client_name || "Client"}`,
-            description: r.note || "No description provided.",
-            category: r.contract_type || "General",
-            date: r.created_at ? new Date(r.created_at * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "",
-            hours: r.max_daily_hours || r.event_included_hours || 0,
-            status,
-            payment_status: r.payment_status,
-            event_status: r.event_status,
-            payout_status: r.payout_status,
+            id: p.id,
+            freelancer_id: p.freelancer_id,
+            title: p.title || `Project from ${p.client_name || "Client"}`,
+            description: `Project for ${p.client_name}. Status: ${p.status}`,
+            category: p.category || "General",
+            date: p.start_date,
+            hours: 0,
+            status: p.status, // ACCEPTED, IN_PROGRESS, COMPLETED, VERIFIED
+            payment_status: "Paid", 
+            event_status: p.status.toLowerCase(),
+            payout_status: "Pending",
           };
+        }).sort((a, b) => {
+          if (!id) return 0;
+          if (String(a.id) === String(id)) return -1;
+          if (String(b.id) === String(id)) return 1;
+          return 0;
         });
         setGigs(mapped);
       })
       .catch(err => {
-        console.error("Failed to load gig activity:", err);
+        console.error("Failed to load project activity:", err);
         setGigs([]);
       })
       .finally(() => setLoading(false));
-  }, [user?.id]);
+  }, [user?.id, id]);
 
   const weeklySummary = useMemo(() => {
     const totalGigs = gigs.filter(g => g.status === 'Completed' || g.status === 'Ongoing').length;
@@ -85,32 +85,29 @@ export default function GigActivityPage() {
     if (!window.confirm("Are you sure you want to mark this project as completed?")) return;
     try {
       setLoading(true);
-      await freelancerService.completeWork(freelancerId, gigId, "Work finished");
-      // Refresh the inbox locally to update status
-      const res = await freelancerService.getHireInbox(user.id);
-      const requests = res.requests || [];
-      const mapped = requests.map(r => {
-        let status = "Upcoming";
-        if (r.status === "ACCEPTED") status = "Ongoing";
-        else if (r.status === "REJECTED") status = "Cancelled";
-        else if (r.status === "COMPLETED") status = "Completed";
-        else if (r.status === "PENDING") status = "Upcoming";
-
-        return {
-          id: r.request_id,
-          freelancer_id: r.freelancer_id,
-          title: r.job_title || `Gig from ${r.client_name || "Client"}`,
-          description: r.note || "No description provided.",
-          category: r.contract_type || "General",
-          date: r.created_at ? new Date(r.created_at * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "",
-          hours: r.max_daily_hours || r.event_included_hours || 0,
-          status,
-          payment_status: r.payment_status,
-          event_status: r.event_status,
-          payout_status: r.payout_status,
-        };
-      });
-      setGigs(mapped);
+      const res = await artistService.completeProject(freelancerId, gigId, "Completed from activity page", "");
+      if (res.success) {
+        alert("Project marked as completed!");
+        // Refresh
+        const projRes = await artistService.getContractProjects(user.id);
+        const projects = projRes.projects || [];
+        const mapped = projects.map(p => ({
+          id: p.id,
+          freelancer_id: p.freelancer_id,
+          title: p.title || `Project from ${p.client_name || "Client"}`,
+          description: `Project for ${p.client_name}. Status: ${p.status}`,
+          category: p.category || "General",
+          date: p.start_date,
+          hours: 0,
+          status: p.status,
+          payment_status: "Paid",
+          event_status: p.status.toLowerCase(),
+          payout_status: "Pending",
+        }));
+        setGigs(mapped);
+      } else {
+        alert(res.msg || "Error completing project.");
+      }
     } catch (err) {
       alert("Error completing gig. Try again later.");
     } finally {

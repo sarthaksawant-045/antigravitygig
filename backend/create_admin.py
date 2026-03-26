@@ -1,6 +1,6 @@
 import time
 from postgres_config import get_postgres_connection, get_dict_cursor
-from security import generate_password_hash
+from werkzeug.security import generate_password_hash
 
 conn = get_postgres_connection()
 cur = get_dict_cursor(conn)

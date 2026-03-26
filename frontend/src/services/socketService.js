@@ -98,6 +98,15 @@ class SocketService {
         this.emit('joined_conversation', data);
       });
 
+      this.socket.on('applicationSent', (payload) => {
+        console.log('[SOCKET] Application event received:', payload);
+        this.emit('applicationSent', payload);
+      });
+
+      this.socket.on('notificationCreated', (payload) => {
+        this.emit('notificationCreated', payload);
+      });
+
       // Error handling
       this.socket.on('error', (error) => {
         console.error('[SOCKET] Socket error:', error);

@@ -41,6 +41,18 @@ import MyProjects from "./pages/MyProjects.jsx";
 import ViewApplicants from "./pages/ViewApplicants.jsx";
 import GlobalCallHandler from "./components/GlobalCallHandler.jsx";
 
+// Admin Pages
+import AdminLogin from "./pages/admin/AdminLogin.jsx";
+import AdminDashboard from "./pages/admin/AdminDashboard.jsx";
+import AdminClients from "./pages/admin/AdminClients.jsx";
+import AdminFreelancers from "./pages/admin/AdminFreelancers.jsx";
+import AdminKYC from "./pages/admin/AdminKYC.jsx";
+import AdminKYCReview from "./pages/admin/AdminKYCReview.jsx";
+import AdminAuditLogs from "./pages/admin/AdminAuditLogs.jsx";
+import AdminProjects from "./pages/admin/AdminProjects.jsx";
+import AdminPayments from "./pages/admin/AdminPayments.jsx";
+import AdminEmailLogs from "./pages/admin/AdminEmailLogs.jsx";
+
 const StatsStrip = () => (
   <section className="stats">
     <div className="stats-inner">
@@ -65,10 +77,12 @@ const AppContent = () => {
   const isArtistDashboard = 
     location.pathname.startsWith("/artist/") || 
     location.pathname === "/dashboard";
+  
+  const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
     <>
-      <Navbar />
+      {!isAdminRoute && <Navbar />}
       <Routes>
         <Route path="/" element={<PublicRoute><><Hero /><StatsStrip /></></PublicRoute>} />
         <Route path="/signup/:role" element={<PublicRoute><AuthSignup /></PublicRoute>} />
@@ -108,6 +122,9 @@ const AppContent = () => {
           <ProtectedFreelancerRoute><OpportunitiesPage /></ProtectedFreelancerRoute>
         } />
         <Route path="/artist/projects" element={
+          <ProtectedFreelancerRoute><GigActivityPage /></ProtectedFreelancerRoute>
+        } />
+        <Route path="/projects/:id" element={
           <ProtectedFreelancerRoute><GigActivityPage /></ProtectedFreelancerRoute>
         } />
         <Route path="/artist/messages" element={
@@ -160,6 +177,18 @@ const AppContent = () => {
         <Route path="/project/:id/applicants" element={
           <ProtectedClientRoute><ViewApplicants /></ProtectedClientRoute>
         } />
+
+        {/* Admin Routes */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/clients" element={<AdminClients />} />
+        <Route path="/admin/freelancers" element={<AdminFreelancers />} />
+        <Route path="/admin/kyc" element={<AdminKYC />} />
+        <Route path="/admin/kyc/:doc_id" element={<AdminKYCReview />} />
+        <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+        <Route path="/admin/projects" element={<AdminProjects />} />
+        <Route path="/admin/payments" element={<AdminPayments />} />
+        <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

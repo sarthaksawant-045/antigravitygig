@@ -81,8 +81,12 @@ def configure_cors(app):
     # Get allowed origins from environment or use defaults
     allowed_origins = [
         "https://gigbridge.com",  # Production
-        "http://localhost:3000",   # Development
-        "http://127.0.0.1:3000",  # Development alternative
+        "http://localhost:3000",   # Development (Vite/React)
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",   # Default Vite port
+        "http://127.0.0.1:5173",
+        "https://localhost:3000",
+        "https://localhost:5173",
     ]
     
     # Add additional origins from environment if specified
@@ -93,7 +97,7 @@ def configure_cors(app):
     CORS(app, 
          origins=allowed_origins,
          methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         allow_headers=["Content-Type", "Authorization"],
+         allow_headers=["Content-Type", "Authorization", "X-ADMIN-TOKEN"],
          supports_credentials=True,
          max_age=86400)  # 24 hours
 
@@ -293,3 +297,12 @@ def sanitize_request_data():
             request.sanitized_data = {}
     else:
         request.sanitized_data = {}
+
+def security_request_logging(app):
+    """Log security-related request info for debugging"""
+    @app.before_request
+    def log_admin_request():
+        if request.path.startswith('/admin'):
+            # Log method and path, and mention if token is present
+            token = request.headers.get('X-ADMIN-TOKEN')
+            print(f"[SECURITY] Admin Request: {request.method} {request.path} (Token: {'Present' if token else 'Missing'})")

@@ -1,6 +1,7 @@
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { getNotifications } from "../services/notificationService.js";
 
 const MENU = [
   { key: "dashboard", label: "Dashboard", ico: "▦", path: "/artist/dashboard" },
@@ -20,22 +21,15 @@ export default function DashboardSidebar({ active = "dashboard", onSelect }) {
   const navigate = useNavigate();
   const name = user.name || user.email || "Artist";
   
-  // Dynamic counts for messages and notifications
-  const [messageCount, setMessageCount] = useState(3); // This will come from backend/messages
-  const [notificationCount, setNotificationCount] = useState(5); // This will come from backend/notifications
+  const [messageCount, setMessageCount] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
 
-  // Simulate dynamic updates (in real app, this would come from backend)
   useEffect(() => {
-    // In real implementation:
-    // 1. Fetch message count from messages API
-    // 2. Fetch notification count from notifications API
-    // 3. Update counts when new messages/notifications arrive
-    // 4. Update counts when messages/notifications are read/dismissed
-    
-    // For demo: You can change these values to test different states
-    setMessageCount(2); // Change to see different message count
-    setNotificationCount(3); // Change to see different notification count
-  }, []);
+    if (!user?.id) return;
+    getNotifications(user.id)
+      .then((response) => setNotificationCount(response.unread_count || 0))
+      .catch(() => setNotificationCount(0));
+  }, [user?.id]);
 
   const handleNav = (item) => {
     if (item.path) {

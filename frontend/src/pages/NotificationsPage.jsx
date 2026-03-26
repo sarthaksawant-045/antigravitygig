@@ -1,33 +1,112 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 import { getNotifications, markAsRead, markAllAsRead } from '../services/notificationService';
+import socketService from '../services/socketService';
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const formatRelativeTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000) - Number(timestamp));
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    }
+    if (seconds < 86400) {
+      const hours = Math.floor(seconds / 3600);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  };
 
   useEffect(() => {
-    setLoading(true);
-    getNotifications().then(data => {
-      setNotifications(data);
-      setLoading(false);
-    });
-  }, []);
+    if (!user?.id) return;
 
-  const handleMarkAsRead = async (id) => {
-    await markAsRead(id);
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    setLoading(true);
+    getNotifications(user.id)
+      .then((response) => {
+        setNotifications(response.notifications || []);
+        setUnreadCount(response.unread_count || 0);
+      })
+      .catch(() => {
+        setNotifications([]);
+        setUnreadCount(0);
+      })
+      .finally(() => setLoading(false));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const connectPromise = socketService.connected
+      ? Promise.resolve()
+      : socketService.connect(user.id, user.role || 'freelancer').catch(() => null);
+
+    const handleNotificationCreated = (notification) => {
+      if (!notification || Number(notification.user_id) !== Number(user.id)) return;
+      setNotifications((prev) => [notification, ...prev]);
+      setUnreadCount((prev) => prev + (notification.is_read ? 0 : 1));
+    };
+
+    connectPromise.finally(() => {
+      socketService.on('notificationCreated', handleNotificationCreated);
+    });
+
+    return () => {
+      socketService.off('notificationCreated', handleNotificationCreated);
+    };
+  }, [user?.id, user?.role]);
+
+  const hasUnread = useMemo(() => notifications.some((item) => !item.is_read), [notifications]);
+
+  const handleNotificationClick = async (notification) => {
+    if (!notification) return;
+
+    if (!notification.is_read) {
+      try {
+        await markAsRead(notification.notification_id);
+        setNotifications((prev) => prev.map((item) => (
+          item.notification_id === notification.notification_id
+            ? { ...item, is_read: true }
+            : item
+        )));
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch {
+        return;
+      }
+    }
+
+    if (notification.reference_id) {
+      navigate(`/projects/${notification.reference_id}`);
+    }
   };
 
   const handleMarkAllAsRead = async () => {
-    await markAllAsRead();
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    if (!user?.id) return;
+    try {
+      await markAllAsRead(user.id);
+      setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+      setUnreadCount(0);
+    } catch {
+      return;
+    }
   };
 
   return (
     <div className="page-wrap" style={{ marginTop: '24px' }}>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>Notifications</h1>
-        {notifications.some(n => !n.read) && (
+        <h1 className="page-title" style={{ margin: 0 }}>
+          Notifications{unreadCount > 0 ? ` (${unreadCount})` : ''}
+        </h1>
+        {hasUnread && (
           <button className="mark-all-btn" onClick={handleMarkAllAsRead} style={{ background: 'transparent', color: '#3b82f6', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
             Mark all as read
           </button>
@@ -42,21 +121,21 @@ export default function NotificationsPage() {
           </div>
         ) : notifications.length === 0 ? (
           <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-            <p>You have no notifications yet.</p>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>ðŸ“­</div>
+            <p>You have no new notifications.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {notifications.map((notif, index) => (
-              <div 
-                key={notif.id} 
+              <div
+                key={notif.notification_id}
                 className="fade-in"
-                onClick={() => !notif.read && handleMarkAsRead(notif.id)}
-                style={{ 
-                  padding: '20px 24px', 
+                onClick={() => handleNotificationClick(notif)}
+                style={{
+                  padding: '20px 24px',
                   borderBottom: index !== notifications.length - 1 ? '1px solid #f3f4f6' : 'none',
-                  background: notif.read ? '#ffffff' : '#f0f9ff',
-                  cursor: notif.read ? 'default' : 'pointer',
+                  background: notif.is_read ? '#ffffff' : '#f0f9ff',
+                  cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -64,12 +143,15 @@ export default function NotificationsPage() {
                 }}
               >
                 <div>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937', fontWeight: notif.read ? 400 : 500 }}>
+                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#1f2937', fontWeight: notif.is_read ? 500 : 700 }}>
+                    {notif.title}
+                  </p>
+                  <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937', fontWeight: notif.is_read ? 400 : 500 }}>
                     {notif.message}
                   </p>
-                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>Just now</span>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>{formatRelativeTime(notif.created_at)}</span>
                 </div>
-                {!notif.read && (
+                {!notif.is_read && (
                   <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }}></div>
                 )}
               </div>

@@ -86,6 +86,27 @@ def create_tables():
     _try_add_column(cur, "notification", "related_entity_id INTEGER")
     _try_add_column(cur, "notification", "is_read BOOLEAN DEFAULT FALSE")
 
+    # Unified notifications table used by the notification center
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS notifications (
+        notification_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        recipient_role TEXT NOT NULL DEFAULT 'freelancer',
+        sender_id INTEGER,
+        type TEXT NOT NULL DEFAULT 'APPLICATION_UPDATE',
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        reference_id INTEGER,
+        is_read BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW()
+    )
+    """)
+    _try_add_column(cur, "notifications", "recipient_role TEXT DEFAULT 'freelancer'")
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user_id_created_at ON notifications(user_id, created_at DESC)")
+    except Exception:
+        pass
+
     # Call session (client.db copy)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS call_session (
@@ -651,6 +672,27 @@ def create_tables():
         admin_note TEXT,
         resolution_type TEXT,
         resolved_at INTEGER
+    )
+    """)
+
+    # ==========================
+    # PROJECTS (Job Lifecycle)
+    # ==========================
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS projects (
+        id SERIAL PRIMARY KEY,
+        hire_id INTEGER UNIQUE,
+        client_id INTEGER,
+        freelancer_id INTEGER,
+        title TEXT,
+        agreed_price REAL,
+        pricing_type TEXT,
+        start_date TEXT,
+        start_time TEXT,
+        end_date TEXT,
+        end_time TEXT,
+        status TEXT DEFAULT 'ACCEPTED',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
 

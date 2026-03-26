@@ -134,4 +134,17 @@ export const artistService = {
       return { success: true, items: [] };
     }
   },
+  // NEW: Project Lifecycle (Contracts)
+  getContractProjects: async (freelancerId) => {
+    return await api.get(`/projects/list?user_id=${freelancerId}&role=freelancer`);
+  },
+
+  completeProject: async (freelancerId, projectId, note, proof) => {
+    return await api.post('/project/complete', {
+      freelancer_id: freelancerId,
+      project_id: projectId,
+      completion_note: note,
+      proof: proof
+    });
+  },
 };

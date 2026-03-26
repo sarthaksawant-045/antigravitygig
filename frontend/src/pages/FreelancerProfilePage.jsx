@@ -91,7 +91,23 @@ export default function FreelancerProfilePage() {
         <div className="db-shell">
           <DashboardSidebar active={active} onSelect={setActive} />
           <main className="db-main profile-page">
-            <div className="loading-spinner">Loading profile...</div>
+            <div className="profile-top-bar">
+               <div className="skeleton skeleton-title"></div>
+            </div>
+            <div className="skeleton" style={{ height: '100px', borderRadius: '12px', margin: '20px 0' }}></div>
+            <div className="profile-content-card" style={{ padding: '24px' }}>
+               <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+                  <div className="skeleton skeleton-avatar" style={{ width: '100px', height: '100px' }}></div>
+                  <div style={{ flex: 1 }}>
+                     <div className="skeleton skeleton-title"></div>
+                     <div className="skeleton skeleton-subtitle"></div>
+                  </div>
+               </div>
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
+                  <div className="skeleton skeleton-text" style={{ height: '100px' }}></div>
+                  <div className="skeleton skeleton-text" style={{ height: '100px' }}></div>
+               </div>
+            </div>
           </main>
         </div>
       </div>

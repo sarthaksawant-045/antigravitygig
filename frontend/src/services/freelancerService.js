@@ -92,7 +92,20 @@ export const freelancerService = {
     });
   },
 
-  getReviews: async (freelancerId) => {
-    return await api.get(`/freelancer/reviews?freelancer_id=${freelancerId}`);
+  getReviews: async (freelancer_id) => {
+    return await api.get(`/freelancer/reviews?freelancer_id=${freelancer_id}`);
+  },
+
+  getApplications: async (freelancerId) => {
+    return await api.get(`/applications/freelancer?freelancer_id=${freelancerId}`);
+  },
+
+  applyToProject: async (freelancerId, projectId, proposal, bidAmount) => {
+    return await api.post('/freelancer/projects/apply', {
+      freelancer_id: freelancerId,
+      project_id: projectId,
+      proposal,
+      bid_amount: bidAmount
+    });
   },
 };

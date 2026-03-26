@@ -7,6 +7,7 @@ import hmac
 import hashlib
 from flask import Blueprint, request, jsonify
 from database import freelancer_db, client_db, get_dict_cursor, mark_job_completed
+from admin_db import log_transaction
 from payment_config import (
     RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET,
@@ -145,6 +146,8 @@ def payment_hire_create_order():
         """, (hire_id,))
         conn.commit()
 
+        log_transaction(row["freelancer_id"], row["client_id"], float(row["proposed_budget"]), "Pending", row.get("project_id"))
+
         return jsonify({
             "success": True,
             "razorpay_order_id": order_id,
@@ -194,7 +197,41 @@ def payment_hire_verify():
         cur.execute("""
             UPDATE hire_request SET payment_status='paid', payout_status='on_hold', event_status=%s WHERE id=%s
         """, (EVENT_SCHEDULED, int(hire_id)))
+        # Log the successful payment
+        cur.execute("SELECT client_id, freelancer_id, proposed_budget FROM hire_request WHERE id=%s", (int(hire_id),))
+        h = cur.fetchone()
+        if h:
+            from admin_db import log_transaction
+            log_transaction(h["freelancer_id"], h["client_id"], float(h["proposed_budget"]), "Paid", int(hire_id))
+
         conn.commit()
+        try:
+            from app import send_payment_receipt_emails
+            send_payment_receipt_emails(
+                hire_id=int(hire_id),
+                order_id=razorpay_order_id,
+                payment_id=razorpay_payment_id,
+                amount=float(h["proposed_budget"] or 0) if h else 0,
+                currency="INR",
+                status="Paid"
+            )
+        except Exception:
+            pass
+        try:
+            from notification_helper import notify_freelancer
+            if h:
+                notify_freelancer(
+                    freelancer_id=h["freelancer_id"],
+                    sender_id=h["client_id"],
+                    notification_type="PAYMENT_RECEIVED",
+                    title="Payment Received",
+                    message=f"Payment of INR {float(h['proposed_budget'] or 0):,.2f} was completed for your gig.",
+                    related_entity_type="payment",
+                    related_entity_id=int(hire_id),
+                    reference_id=int(hire_id),
+                )
+        except Exception:
+            pass
         return jsonify({"success": True, "msg": "Payment verified"})
     except Exception as e:
         if conn:

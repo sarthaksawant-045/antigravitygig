@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { clientService } from "../services";
+import socketService from "../services/socketService";
 import "./ViewApplicants.css";
 
 export default function ViewApplicants() {
@@ -18,23 +20,43 @@ export default function ViewApplicants() {
     }
   }, [id, user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const connectPromise = socketService.connected
+      ? Promise.resolve()
+      : socketService.connect(user.id, user.role || "client").catch(() => null);
+
+    const handleApplicationSent = (payload) => {
+      if (Number(payload?.project_id) === Number(id)) {
+        fetchProjectAndApplicants();
+      }
+    };
+
+    connectPromise.finally(() => {
+      socketService.on("applicationSent", handleApplicationSent);
+    });
+
+    return () => {
+      socketService.off("applicationSent", handleApplicationSent);
+    };
+  }, [id, user?.id, user?.role]);
+
   const fetchProjectAndApplicants = async () => {
     setLoading(true);
     try {
-      // 1. Fetch project details by finding it in client's project list
-      const projRes = await clientService.getProjects(user.id);
-      if (projRes.success) {
-        const found = projRes.projects.find(p => p.id === parseInt(id));
-        setProject(found || null);
-      }
-
-      // 2. Fetch applicants
       const appRes = await clientService.getProjectApplicants(user.id, id);
       if (appRes.success) {
+        setProject(appRes.project || null);
         setApplicants(appRes.applicants || []);
+      } else {
+        setProject(null);
+        setApplicants([]);
       }
     } catch (err) {
       console.error("Fetch error:", err);
+      setProject(null);
+      setApplicants([]);
     } finally {
       setLoading(false);
     }
@@ -79,9 +101,14 @@ export default function ViewApplicants() {
   if (loading) {
     return (
       <div className="view-applicants-container">
-        <div className="loading-state">
-          <div className="loading-spinner"></div>
-          <p>Loading project details...</p>
+        <div className="applicants-header">
+           <div className="skeleton skeleton-title" style={{ width: '40%' }}></div>
+        </div>
+        <div className="skeleton" style={{ height: '140px', borderRadius: '12px', marginBottom: '24px' }}></div>
+        <div className="applicants-list">
+           {[1, 2, 3].map(i => (
+             <div key={i} className="applicant-card skeleton" style={{ height: '160px', marginBottom: '20px', background: '#f8fafc' }}></div>
+           ))}
         </div>
       </div>
     );

@@ -1,37 +1,57 @@
 import { api } from './api';
 
-/**
- * Fetch notifications for a given user.
- * @param {number|string} userId   – the client_id or freelancer_id
- * @param {'client'|'freelancer'} role – role of the logged-in user
- */
-export const getNotifications = async (userId, role = 'client') => {
-  if (!userId) return [];
+function getAuthHeaders() {
   try {
-    if (role === 'freelancer') {
-      const res = await api.get(`/freelancer/notifications?freelancer_id=${userId}`);
-      return res.notifications || [];
-    } else {
-      const res = await api.get(`/client/notifications?client_id=${userId}`);
-      return res.notifications || [];
-    }
-  } catch (err) {
-    console.error('Failed to fetch notifications:', err);
-    return [];
+    const raw = localStorage.getItem('gb_user_data');
+    const user = raw ? JSON.parse(raw) : null;
+    if (!user?.id) return {};
+    return {
+      'X-USER-ID': String(user.id),
+      'X-USER-ROLE': String(user.role || ''),
+    };
+  } catch {
+    return {};
+  }
+}
+
+export const getNotifications = async (userId) => {
+  if (!userId) {
+    return { success: true, unread_count: 0, notifications: [] };
+  }
+
+  try {
+    return await api.get(`/api/notifications/${userId}`, {
+      headers: getAuthHeaders(),
+    });
+  } catch (error) {
+    throw error;
   }
 };
 
 export const markAsRead = async (notificationId) => {
-  // Backend doesn't have a mark-read endpoint yet – no-op for now
-  return Promise.resolve();
+  if (!notificationId) {
+    return { success: false, unread_count: 0 };
+  }
+
+  try {
+    return await api.put(`/api/notifications/${notificationId}/read`, {}, {
+      headers: getAuthHeaders(),
+    });
+  } catch (error) {
+    throw error;
+  }
 };
 
-export const markAllAsRead = async () => {
-  // Backend doesn't have a mark-all-read endpoint yet – no-op for now
-  return Promise.resolve();
-};
+export const markAllAsRead = async (userId) => {
+  if (!userId) {
+    return { success: false, updated: 0 };
+  }
 
-export const addNewNotification = (notification) => {
-  // Placeholder for WebSocket / real-time integration
-  console.log('New notification received:', notification);
+  try {
+    return await api.put(`/api/notifications/read-all/${userId}`, {}, {
+      headers: getAuthHeaders(),
+    });
+  } catch (error) {
+    throw error;
+  }
 };

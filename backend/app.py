@@ -1,5 +1,6 @@
 import psycopg2
 import psycopg2.errors
+from datetime import datetime
 from flask import Flask, request, jsonify
 from database import client_db, freelancer_db, mark_job_completed
 from psycopg2.extras import RealDictCursor
@@ -17,7 +18,7 @@ import shutil
 from email.message import EmailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from admin_db import ensure_admin_tables
+from admin_db import ensure_admin_tables, log_email, log_admin_alert, admin_db, log_transaction
 from admin_routes import admin_bp
 from kyc_routes import kyc_bp
 from client_kyc_routes import client_kyc_bp
@@ -27,6 +28,12 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+file_handler = logging.FileHandler('persistent_error_log.txt', mode='w', encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
+
+# Also add to werkzeug logger
+logging.getLogger('werkzeug').addHandler(file_handler)
 
 # Initialize Socket.IO
 try:
@@ -181,7 +188,18 @@ from categories import is_valid_category
 
 from flask_cors import CORS
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}})
+CORS(app)
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    # Log the traceback
+    logger.exception(f"Unhandled Exception: {e}")
+    return jsonify({"success": False, "msg": "Server error occurred"}), 500
+
+# Initialize Socket.IO with the Flask app
+if SOCKET_IO_ENABLED and socketio is not None:
+    socketio.init_app(app, cors_allowed_origins="*")
+    logger.info('[SOCKET] Socket.IO initialized with Flask app')
 
 # ============================================================
 # VERBOSE LOGGING FOR DEBUGGING
@@ -236,17 +254,27 @@ def method_not_allowed(error):
 
 @app.errorhandler(500)
 def internal_error(error):
-    return jsonify({"success": False, "msg": "Internal server error"}), 500
+    import traceback
+    err_tb = traceback.format_exc()
+    logger.error(f"500 Internal Error: {err_tb}")
+    return jsonify({
+        "success": False, 
+        "msg": "Internal server error", 
+        "error": str(error),
+        "traceback": err_tb
+    }), 500
 
 @app.errorhandler(Exception)
 def handle_exception(error):
-    # Log the full error for debugging
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.error(f"Unhandled exception: {type(error).__name__}: {str(error)}", exc_info=True)
+    import traceback
+    err_tb = traceback.format_exc()
+    logger.error(f"Unhandled exception: {err_tb}")
     
-    # Return user-friendly error
-    return jsonify({"success": False, "msg": "Server error occurred"}), 500
+    # Return user-friendly error with traceback (STRICTLY FOR DEBUGGING)
+    return jsonify({
+        "success": False, 
+        "msg": "Server error occurred"
+    }), 500
 
 create_tables()
 ensure_admin_tables()
@@ -290,6 +318,17 @@ def validate_startup():
 
 # Run startup validation
 validate_startup()
+
+from security import security_middleware, security_request_logging
+from admin_routes import admin_bp # Assuming admin_routes is imported here or earlier
+
+app.config['SECRET_KEY'] = 'dev-secret-key'
+
+# Apply security middleware (CORS, JWT, Rate Limiting, etc.)
+jwt = security_middleware(app)
+
+# Register request logging
+security_request_logging(app)
 
 # Register blueprints
 app.register_blueprint(admin_bp)
@@ -365,6 +404,100 @@ def get_json():
 def require_fields(data, fields):
     return [f for f in fields if f not in data or str(data[f]).strip() == ""]
 
+def create_project(hire_id):
+    """
+    Creates a new project record from an accepted hire request.
+    This is called when either a freelancer or client accepts the final offer.
+    """
+    try:
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        
+        # Pull the hire request details
+        cur.execute("""
+            SELECT id, client_id, freelancer_id, job_title, final_agreed_amount, proposed_budget,
+                   pricing_type, event_date, start_time, end_time
+            FROM hire_request WHERE id = %s
+        """, (hire_id,))
+        hire = cur.fetchone()
+        
+        if not hire:
+            conn.close()
+            return False, "Hire request not found"
+            
+        # Determine the price (final_agreed_amount if negotiated, else proposed_budget)
+        agreed_price = hire.get("final_agreed_amount") or hire.get("proposed_budget") or 0
+        
+        # Check if project already exists for this hire_id
+        cur.execute("SELECT id FROM projects WHERE hire_id = %s", (hire_id,))
+        if cur.fetchone():
+            conn.close()
+            return True, "Project already exists"
+            
+        # Insert the project
+        cur.execute("""
+            INSERT INTO projects (
+                hire_id, client_id, freelancer_id, title, agreed_price,
+                pricing_type, start_date, start_time, end_date, end_time, status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACCEPTED')
+            RETURNING id
+        """, (
+            hire["id"], hire["client_id"], hire["freelancer_id"], hire["job_title"],
+            agreed_price, hire["pricing_type"], hire["event_date"], hire["start_time"],
+            hire["event_date"], hire["end_time"], 
+        ))
+        
+        project_id = cur.fetchone()["id"]
+        
+        conn.commit()
+        conn.close()
+        
+        # Emit real-time event
+        try:
+            from notification_helper import notify_client, notify_freelancer
+            
+            # Notify client
+            notify_client(
+                client_id=hire["client_id"],
+                message=f"Project '{hire['job_title']}' has been created and is now tracking progress.",
+                title="Project Created",
+                related_entity_type="project",
+                related_entity_id=project_id
+            )
+            
+            # Notify freelancer
+            notify_freelancer(
+                freelancer_id=hire["freelancer_id"],
+                message=f"A new project record for '{hire['job_title']}' has been created.",
+                title="Project Created",
+                related_entity_type="project",
+                related_entity_id=project_id
+            )
+
+            from socket_service import socketio
+            if socketio:
+                socketio.emit("projectCreated", {
+                    "project_id": project_id,
+                    "hire_id": hire["id"],
+                    "client_id": hire["client_id"],
+                    "freelancer_id": hire["freelancer_id"],
+                    "title": hire["job_title"]
+                }, room=f"user_{hire['client_id']}")
+                socketio.emit("projectCreated", {
+                    "project_id": project_id,
+                    "hire_id": hire["id"],
+                    "client_id": hire["client_id"],
+                    "freelancer_id": hire["freelancer_id"],
+                    "title": hire["job_title"]
+                }, room=f"user_{hire['freelancer_id']}")
+        except Exception as se:
+            print(f"Socket emit failed: {se}")
+            
+        return True, "Project created successfully"
+    except Exception as e:
+        print(f"Error creating project: {e}")
+        return False, str(e)
+
 def valid_email(email):
     email = (email or "").strip()
     return ("@" in email) and ("." in email)
@@ -386,6 +519,337 @@ def validate_input(value, max_length, field_name):
     value_str = value_str.replace('<', '&lt;').replace('>', '&gt;')
     
     return value_str, None
+
+def check_project_status_transitions():
+    """
+    Checks projects in 'ACCEPTED' state and moves them to 'IN_PROGRESS'
+    if the start_date has been reached.
+    """
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        
+        # Get all ACCEPTED projects that should be IN_PROGRESS
+        cur.execute("""
+            SELECT id, hire_id, client_id, freelancer_id, title, start_date
+            FROM projects 
+            WHERE status = 'ACCEPTED' AND start_date <= %s
+        """, (today,))
+        
+        to_move = cur.fetchall()
+        
+        for p in to_move:
+            cur.execute("UPDATE projects SET status = 'IN_PROGRESS' WHERE id = %s", (p["id"],))
+            
+            # Emit socket events
+            try:
+                if socketio:
+                    socketio.emit("projectStatusChanged", {
+                        "project_id": p["id"],
+                        "status": "IN_PROGRESS"
+                    }, room=f"user_{p['client_id']}")
+                    socketio.emit("projectStatusChanged", {
+                        "project_id": p["id"],
+                        "status": "IN_PROGRESS"
+                    }, room=f"user_{p['freelancer_id']}")
+            except Exception as se:
+                print(f"Socket emit failed in transitions: {se}")
+        
+        conn.commit()
+        conn.close()
+        return len(to_move)
+    except Exception as e:
+        print(f"Error checking status transitions: {e}")
+        return 0
+
+def check_unverified_completions():
+    """
+    Checks projects in 'COMPLETED' state for more than 3 days 
+    and flags them for admin review if not 'VERIFIED'.
+    """
+    try:
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+        
+        # 3 days ago timestamp
+        three_days_ago = int(time.time()) - (3 * 24 * 3600)
+        
+        # Get hire_ids from projects to check against hire_request completed_at
+        cur.execute("""
+            SELECT p.id, p.hire_id, p.client_id, h.completed_at
+            FROM projects p
+            JOIN hire_request h ON h.id = p.hire_id
+            WHERE p.status = 'COMPLETED' AND h.completed_at < %s
+        """, (three_days_ago,))
+        
+        stale = cur.fetchall()
+        for s in stale:
+            print(f"⚠️ Project {s['id']} (Hire {s['hire_id']}) is STALE COMPLETED.")
+            log_admin_alert('DEADLINE_MISSED', f"Project {s['id']} unverified for > 3 days.", related_id=s['id'])
+            # Notify client again
+            send_email(
+                "client@example.com", # Should fetch actual client email
+                "⚠️ Action Required: Verify Project Completion",
+                f"Project {s['id']} has been marked as completed for 3 days. Please verify it.",
+                related_project_id=s['id']
+            )
+
+        conn.close()
+    except Exception as e:
+        print(f"Error checking stale completions: {e}")
+
+def check_pending_payments():
+    """Checks for pending payments in audit_logs older than 24h."""
+    try:
+        conn = admin_db()
+        cur = conn.cursor()
+        one_day_ago = int(time.time()) - (24 * 3600)
+        cur.execute("SELECT id, project_id, transaction_amount FROM audit_logs WHERE payment_status = 'Pending' AND created_at < %s", (one_day_ago,))
+        pending = cur.fetchall()
+        for p in pending:
+            log_admin_alert('PAYMENT_DELAY', f"Payment of ₹{p[2]} for project {p[1]} pending > 24h.", related_id=p[1])
+        conn.close()
+    except Exception as e:
+        print(f"Error checking pending payments: {e}")
+
+
+def generate_action_required_notifications(user_id=None):
+    """Create one-time notifications for overdue in-progress gigs."""
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        conn = freelancer_db()
+        cur = get_dict_cursor(conn)
+
+        query = """
+            SELECT p.id, p.freelancer_id, p.client_id, p.title, p.start_date, c.name AS client_name
+            FROM projects p
+            LEFT JOIN client c ON c.id = p.client_id
+            WHERE p.status IN ('ACCEPTED', 'IN_PROGRESS')
+              AND p.start_date < %s
+        """
+        params = [today]
+        if user_id is not None:
+            query += " AND p.freelancer_id = %s"
+            params.append(int(user_id))
+
+        cur.execute(query, tuple(params))
+        projects = cur.fetchall()
+        conn.close()
+
+        from notification_helper import get_notifications, notify_freelancer
+
+        for project in projects:
+            existing = [
+                note for note in get_notifications(project["freelancer_id"], limit=200)
+                if note["type"] == "ACTION_REQUIRED" and int(note.get("reference_id") or 0) == int(project["id"])
+            ]
+            if existing:
+                continue
+
+            notify_freelancer(
+                freelancer_id=project["freelancer_id"],
+                sender_id=project.get("client_id"),
+                notification_type="ACTION_REQUIRED",
+                title="Action Required",
+                message=f"Please mark '{project.get('title') or f'Project #{project['id']}'}' as completed.",
+                related_entity_type="project",
+                related_entity_id=project["id"],
+                reference_id=project["id"],
+            )
+    except Exception as e:
+        print(f"Error generating action-required notifications: {e}")
+
+def run_scheduler():
+    """Simple background scheduler loop."""
+    print("[SCHEDULER] Background scheduler started.")
+    while True:
+        try:
+            check_project_status_transitions()
+            check_unverified_completions()
+            check_pending_payments()
+            generate_action_required_notifications()
+        except Exception as e:
+            print(f"[SCHEDULER] Error in loop: {e}")
+        time.sleep(3600) # Run every hour
+
+@app.route("/projects/list", methods=["GET"])
+def projects_list():
+    """
+    List projects for a user.
+    Query params: user_id, role (client|freelancer)
+    """
+    user_id = request.args.get("user_id")
+    role = request.args.get("role")
+    
+    if not user_id or not role:
+        return jsonify({"success": False, "msg": "user_id and role required"}), 400
+        
+    try:
+        user_id = int(user_id)
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "msg": "Invalid user_id"}), 400
+        
+    # Trigger status transitions before listing
+    check_project_status_transitions()
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    if role == "client":
+        cur.execute("""
+            SELECT p.*, f.name as freelancer_name, f.email as freelancer_email
+            FROM projects p
+            JOIN freelancer f ON f.id = p.freelancer_id
+            WHERE p.client_id = %s
+            ORDER BY p.created_at DESC
+        """, (user_id,))
+    else:
+        cur.execute("""
+            SELECT p.*, c.name as client_name, c.email as client_email
+            FROM projects p
+            JOIN client c ON c.id = p.client_id
+            WHERE p.freelancer_id = %s
+            ORDER BY p.created_at DESC
+        """, (user_id,))
+        
+    projects = cur.fetchall()
+    conn.close()
+    
+    return jsonify({"success": True, "projects": projects})
+
+@app.route("/project/complete", methods=["POST"])
+def project_complete():
+    """
+    Freelancer marks project as completed.
+    Body: { project_id, freelancer_id, completion_note, proof }
+    """
+    d = get_json()
+    missing = require_fields(d, ["project_id", "freelancer_id"])
+    if missing:
+        return jsonify({"success": False, "msg": "Missing fields"}), 400
+        
+    pid = int(d["project_id"])
+    fid = int(d["freelancer_id"])
+    note = d.get("completion_note", "")
+    proof = d.get("proof", "")
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    # Verify project exists and belongs to freelancer
+    cur.execute("SELECT id, hire_id, client_id, status FROM projects WHERE id = %s AND freelancer_id = %s", (pid, fid))
+    proj = cur.fetchone()
+    
+    if not proj:
+        conn.close()
+        return jsonify({"success": False, "msg": "Project not found or access denied"}), 404
+        
+    if proj["status"] not in ("IN_PROGRESS", "ACCEPTED"):
+        conn.close()
+        return jsonify({"success": False, "msg": f"Project cannot be completed from state: {proj['status']}"}), 400
+        
+    # Update project status
+    cur.execute("UPDATE projects SET status = 'COMPLETED' WHERE id = %s", (pid,))
+    
+    # Also update the linked hire_request event_status
+    if proj["hire_id"]:
+        cur.execute("""
+            UPDATE hire_request 
+            SET event_status = 'completed', completion_note = %s, completion_proof = %s, completed_at = %s
+            WHERE id = %s
+        """, (note, proof, int(time.time()), proj["hire_id"]))
+        
+    conn.commit()
+    conn.close()
+    
+    # Emit socket and notification events
+    try:
+        from notification_helper import notify_client
+        notify_client(
+            client_id=proj["client_id"],
+            message=f"Freelancer has marked Project #{pid} as COMPLETED. Please verify the work.",
+            title="Work Completed",
+            related_entity_type="project",
+            related_entity_id=pid
+        )
+        
+        from socket_service import socketio
+        if socketio:
+            socketio.emit("projectStatusChanged", {"project_id": pid, "status": "COMPLETED"}, room=f"user_{proj['client_id']}")
+            socketio.emit("projectStatusChanged", {"project_id": pid, "status": "COMPLETED"}, room=f"user_{fid}")
+    except Exception: pass
+    
+    return jsonify({"success": True, "msg": "Project marked as COMPLETED"})
+
+@app.route("/project/verify", methods=["POST"])
+def project_verify():
+    """
+    Client verifies/approves the completed project.
+    Body: { project_id, client_id }
+    """
+    d = get_json()
+    missing = require_fields(d, ["project_id", "client_id"])
+    if missing:
+        return jsonify({"success": False, "msg": "Missing fields"}), 400
+        
+    pid = int(d["project_id"])
+    cid = int(d["client_id"])
+    
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
+    
+    # Verify project exists and belongs to client
+    cur.execute("SELECT id, hire_id, freelancer_id, status, agreed_price FROM projects WHERE id = %s AND client_id = %s", (pid, cid))
+    proj = cur.fetchone()
+    
+    if not proj:
+        conn.close()
+        return jsonify({"success": False, "msg": "Project not found or access denied"}), 404
+        
+    if proj["status"] != "COMPLETED":
+        conn.close()
+        return jsonify({"success": False, "msg": "Project must be COMPLETED before verification"}), 400
+        
+    # Update project status
+    cur.execute("UPDATE projects SET status = 'VERIFIED' WHERE id = %s", (pid,))
+    
+    # Update hire_request payout_status
+    if proj["hire_id"]:
+        cur.execute("UPDATE hire_request SET payout_status = 'requested' WHERE id = %s", (proj["hire_id"],))
+        
+    # Log transaction for admin
+    from admin_db import log_transaction
+    log_transaction(
+        freelancer_id=proj["freelancer_id"],
+        client_id=cid,
+        amount=proj["agreed_price"],
+        status='Paid', # Assuming verification triggers payment
+        project_id=pid
+    )
+    
+    conn.commit()
+    conn.close()
+    
+    # Emit socket and notification events
+    try:
+        from notification_helper import notify_freelancer
+        notify_freelancer(
+            freelancer_id=proj["freelancer_id"],
+            message=f"Client has verified your work for Project #{pid}. Payout has been requested.",
+            title="Work Verified",
+            related_entity_type="project",
+            related_entity_id=pid
+        )
+        
+        from socket_service import socketio
+        if socketio:
+            socketio.emit("projectStatusChanged", {"project_id": pid, "status": "VERIFIED"}, room=f"user_{cid}")
+            socketio.emit("projectStatusChanged", {"project_id": pid, "status": "VERIFIED"}, room=f"user_{proj['freelancer_id']}")
+    except Exception: pass
+    
+    return jsonify({"success": True, "msg": "Project VERIFIED. Payout requested."})
 
 def validate_email_input(email):
     """Validate and sanitize email input"""
@@ -483,9 +947,11 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 # EMAIL HELPERS
 # ============================================================
 
-def send_email(to_email, subject, body):
+def send_email(to_email, subject, body, related_project_id=None):
     if not SENDER_EMAIL or not APP_PASSWORD:
-        raise RuntimeError("Email credentials missing. Set env vars or configure in code.")
+        print("❌ Email credentials missing. Logging to DB as Failed.")
+        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg="Credentials missing")
+        return False
 
     msg = EmailMessage()
     msg["From"] = SENDER_EMAIL
@@ -499,6 +965,12 @@ def send_email(to_email, subject, body):
         server.starttls()
         server.login(SENDER_EMAIL, APP_PASSWORD)
         server.send_message(msg)
+        log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
+        return True
+    except Exception as e:
+        print(f"❌ Email failed: {e}")
+        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=str(e))
+        return False
     finally:
         if server:
             try:
@@ -2469,67 +2941,98 @@ def client_send_message():
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
     
-    # Ensure conversation exists first
     try:
+        client_id = int(d["client_id"])
+        freelancer_id = int(d["freelancer_id"])
+        text = str(d["text"])
+        timestamp = now_ts()
+        
+        # Step 1: Ensure conversation exists or create it
         cur.execute("""
-            INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
-            VALUES (%s, %s, %s, %s, %s)
-        """, ("client", int(d["client_id"]), int(d["freelancer_id"]), str(d["text"]), now_ts()))
+            SELECT id FROM conversation 
+            WHERE client_id=%s AND freelancer_id=%s
+        """, (client_id, freelancer_id))
+        conv_row = cur.fetchone()
+        
+        if conv_row:
+            conv_id = conv_row["id"]
+        else:
+            # Create new conversation
+            cur.execute("""
+                INSERT INTO conversation (client_id, freelancer_id, last_message_text, last_message_timestamp)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (client_id, freelancer_id, None, None))
+            conv_id = cur.fetchone()["id"]
+        
+        # Step 2: Insert message with conversation_id
+        cur.execute("""
+            INSERT INTO message (conversation_id, sender_role, sender_id, receiver_id, text, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (conv_id, "client", client_id, freelancer_id, text, timestamp))
+        msg_id = cur.fetchone()["id"]
+        
+        # Step 3: Update conversation's last message
+        cur.execute("""
+            UPDATE conversation 
+            SET last_message_text=%s, last_message_timestamp=%s
+            WHERE id=%s
+        """, (text, timestamp, conv_id))
 
-        # Emit real-time message via WebSocket if available
+        # Step 4: Emit real-time message via WebSocket if available
         if SOCKET_IO_ENABLED and socketio is not None:
             message_data = {
-                'sender_id': str(d["client_id"]),
-                'receiver_id': str(d["freelancer_id"]),
+                'id': msg_id,
+                'conversation_id': conv_id,
+                'sender_id': str(client_id),
+                'receiver_id': str(freelancer_id),
                 'sender_role': 'client',
-                'text': str(d["text"]),
-                'timestamp': time.time()
+                'text': text,
+                'timestamp': timestamp
             }
-            socketio.emit('send_message', message_data, room=f"user_{d['freelancer_id']}")
-            print(f'[SOCKET] Real-time message sent from client {d["client_id"]} to freelancer {d["freelancer_id"]}')
+            socketio.emit('new_message', message_data, room=f"user_{freelancer_id}")
+            socketio.emit('new_message', message_data, room=f"conv_{conv_id}")
+            logger.info(f'[SOCKET] Real-time message sent from client {client_id} to freelancer {freelancer_id}')
 
-        # Add notification for client in client.db - get freelancer name
-        cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
+        # Step 5: Get names for notifications
+        cur.execute("SELECT name FROM freelancer WHERE id=%s", (freelancer_id,))
         freelancer_row = cur.fetchone()
         freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
         
-        # Get client name for context
-        cur.execute("SELECT name FROM client WHERE id=%s", (int(d["client_id"]),))
+        cur.execute("SELECT name FROM client WHERE id=%s", (client_id,))
         client_row = cur.fetchone()
         client_name = (client_row.get("name") if isinstance(client_row, dict) else (client_row[0] if client_row else None)) or "Client"
 
-        # Add notification for client using notification helper
+        # Step 6: Add notifications
         try:
             from notification_helper import notify_client
-            
             notify_client(
-                client_id=int(d["client_id"]),
+                client_id=client_id,
                 message=f'You sent a message to {freelancer_name}',
                 title="Message Sent",
                 related_entity_type="message",
-                related_entity_id=None
+                related_entity_id=msg_id
             )
-            
-            # Also notify freelancer about new message
             notify_freelancer(
-                freelancer_id=int(d["freelancer_id"]),
+                freelancer_id=freelancer_id,
                 message=f'New message from {client_name}',
                 title="New Message",
                 related_entity_type="message",
-                related_entity_id=None
+                related_entity_id=msg_id
             )
         except Exception as e:
-            print(f"Error creating message notifications: {e}")
+            logger.warning(f"Error creating message notifications: {e}")
 
         conn.commit()
         conn.close()
 
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message_id": msg_id, "conversation_id": conv_id})
         
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"Error in client_send_message: {e}")
+        logger.error(f"Error in client_send_message: {e}", exc_info=True)
         return jsonify({"success": False, "msg": "Failed to send message"}), 500
 
 @app.route("/freelancer/message/send", methods=["POST"])
@@ -2543,86 +3046,122 @@ def freelancer_send_message():
     cur = get_dict_cursor(conn)
     
     try:
+        freelancer_id = int(d["freelancer_id"])
+        client_id = int(d["client_id"])
+        text = str(d["text"])
+        timestamp = now_ts()
+        
+        # Step 1: Ensure conversation exists or create it
         cur.execute("""
-            INSERT INTO message (sender_role, sender_id, receiver_id, text, timestamp)
-            VALUES (%s, %s, %s, %s, %s)
-        """, ("freelancer", int(d["freelancer_id"]), int(d["client_id"]), str(d["text"]), now_ts()))
+            SELECT id FROM conversation 
+            WHERE client_id=%s AND freelancer_id=%s
+        """, (client_id, freelancer_id))
+        conv_row = cur.fetchone()
+        
+        if conv_row:
+            conv_id = conv_row["id"]
+        else:
+            # Create new conversation
+            cur.execute("""
+                INSERT INTO conversation (client_id, freelancer_id, last_message_text, last_message_timestamp)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (client_id, freelancer_id, None, None))
+            conv_id = cur.fetchone()["id"]
+        
+        # Step 2: Insert message with conversation_id
+        cur.execute("""
+            INSERT INTO message (conversation_id, sender_role, sender_id, receiver_id, text, timestamp)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (conv_id, "freelancer", freelancer_id, client_id, text, timestamp))
+        msg_id = cur.fetchone()["id"]
+        
+        # Step 3: Update conversation's last message
+        cur.execute("""
+            UPDATE conversation 
+            SET last_message_text=%s, last_message_timestamp=%s
+            WHERE id=%s
+        """, (text, timestamp, conv_id))
 
-        # Emit real-time message via WebSocket if available
+        # Step 4: Emit real-time message via WebSocket if available
         if SOCKET_IO_ENABLED and socketio is not None:
             message_data = {
-                'sender_id': str(d["freelancer_id"]),
-                'receiver_id': str(d["client_id"]),
+                'id': msg_id,
+                'conversation_id': conv_id,
+                'sender_id': str(freelancer_id),
+                'receiver_id': str(client_id),
                 'sender_role': 'freelancer',
-                'text': str(d["text"]),
-                'timestamp': time.time()
+                'text': text,
+                'timestamp': timestamp
             }
-            socketio.emit('send_message', message_data, room=f"user_{d['client_id']}")
-            print(f'[SOCKET] Real-time message sent from freelancer {d["freelancer_id"]} to client {d["client_id"]}')
+            socketio.emit('new_message', message_data, room=f"user_{client_id}")
+            socketio.emit('new_message', message_data, room=f"conv_{conv_id}")
+            logger.info(f'[SOCKET] Real-time message sent from freelancer {freelancer_id} to client {client_id}')
 
-        # Add notification for client using notification helper
+        # Step 5: Get names for notifications
+        cur.execute("SELECT name FROM freelancer WHERE id=%s", (freelancer_id,))
+        freelancer_row = cur.fetchone()
+        freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
+        
+        cur.execute("SELECT name FROM client WHERE id=%s", (client_id,))
+        client_row = cur.fetchone()
+        client_name = (client_row.get("name") if isinstance(client_row, dict) else (client_row[0] if client_row else None)) or "Client"
+
+        # Step 6: Add notifications
         try:
             from notification_helper import notify_client
-            
-            # Get freelancer name for context
-            cur.execute("SELECT name FROM freelancer WHERE id=%s", (int(d["freelancer_id"]),))
-            freelancer_row = cur.fetchone()
-            freelancer_name = (freelancer_row.get("name") if isinstance(freelancer_row, dict) else (freelancer_row[0] if freelancer_row else None)) or "Freelancer"
-            
             notify_client(
-                client_id=int(d["client_id"]),
+                client_id=client_id,
                 message=f'New message from {freelancer_name}',
                 title="New Message",
                 related_entity_type="message",
-                related_entity_id=None
+                related_entity_id=msg_id
+            )
+            notify_freelancer(
+                freelancer_id=freelancer_id,
+                message=f'You sent a message to {client_name}',
+                title="Message Sent",
+                related_entity_type="message",
+                related_entity_id=msg_id
             )
         except Exception as e:
-            print(f"Error creating client message notification: {e}")
+            logger.warning(f"Error creating message notifications: {e}")
         
         conn.commit()
         conn.close()
 
-        return jsonify({"success": True})
+        return jsonify({"success": True, "message_id": msg_id, "conversation_id": conv_id})
         
     except Exception as e:
         conn.rollback()
         conn.close()
-        print(f"Error in freelancer_send_message: {e}")
+        logger.error(f"Error in freelancer_send_message: {e}", exc_info=True)
         return jsonify({"success": False, "msg": "Failed to send message"}), 500
 
-@app.route("/message/history", methods=["GET"])
-def message_history():
-    client_id = request.args.get("client_id")
-    freelancer_id = request.args.get("freelancer_id")
-    if not client_id or not freelancer_id:
-        return jsonify({"success": False, "msg": "Missing ids"}), 400
-
-    client_id = int(client_id)
-    freelancer_id = int(freelancer_id)
-
+@app.route("/message/<int:conversation_id>", methods=["GET"])
+def get_messages_by_conversation(conversation_id):
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
     cur.execute("""
-        SELECT sender_role, sender_id, text, timestamp
+        SELECT id, sender_role, sender_id, receiver_id, text, timestamp as "createdAt"
         FROM message
-        WHERE (sender_role='client' AND sender_id=%s AND receiver_id=%s)
-           OR (sender_role='freelancer' AND sender_id=%s AND receiver_id=%s)
-        ORDER BY timestamp
-    """, (client_id, freelancer_id, freelancer_id, client_id))
+        WHERE conversation_id=%s
+        ORDER BY timestamp ASC
+    """, (conversation_id,))
     rows = cur.fetchall()
     conn.close()
 
     chat = []
     for r in rows:
-        if isinstance(r, dict):
-            chat.append({
-                "sender_role": r.get("sender_role"),
-                "sender_id": r.get("sender_id"),
-                "text": r.get("text"),
-                "timestamp": r.get("timestamp")
-            })
-        else:
-            chat.append({"sender_role": r[0], "sender_id": r[1], "text": r[2], "timestamp": r[3]})
+        chat.append({
+            "id": r.get("id"),
+            "sender_role": r.get("sender_role"),
+            "sender_id": r.get("sender_id"),
+            "receiver_id": r.get("receiver_id"),
+            "text": r.get("text"),
+            "timestamp": r.get("createdAt")
+        })
     return jsonify({"success": True, "messages": chat})
 
 # ============================================================
@@ -3199,8 +3738,9 @@ def freelancer_hire_respond():
     conn.commit()
     conn.close()
     
-    # Auto-create conversation when hire is accepted
+    # Auto-create conversation and project when hire is accepted
     if action == "ACCEPT":
+        create_project(request_id)
         try:
             # Get client and freelancer IDs from the hire request
             conn = freelancer_db()
@@ -3398,8 +3938,8 @@ def create_conversation():
     
     return jsonify({"success": True, "conversation_id": new_id})
 
-@app.route("/conversations/<int:user_id>", methods=["GET"])
-def get_conversations(user_id):
+@app.route("/conversation/<int:user_id>", methods=["GET"])
+def get_conversations_for_user(user_id):
     role = request.args.get("role") # 'client' or 'freelancer'
     if not role:
         return jsonify({"success": False, "msg": "role query param ('client' or 'freelancer') is required"}), 400
@@ -3409,7 +3949,7 @@ def get_conversations(user_id):
     
     if role == 'client':
         cur.execute("""
-            SELECT c.id as conversation_id, c.freelancer_id as other_user_id, 
+            SELECT c.id as conversation_id, c.client_id, c.freelancer_id as other_user_id, 
                    f.name as other_user_name, f.profile_image as other_user_pic,
                    c.last_message_text, c.last_message_timestamp as timestamp
             FROM conversation c
@@ -3419,7 +3959,7 @@ def get_conversations(user_id):
         """, (user_id,))
     else:
         cur.execute("""
-            SELECT c.id as conversation_id, c.client_id as other_user_id, 
+            SELECT c.id as conversation_id, c.client_id as other_user_id, c.freelancer_id,
                    cl.name as other_user_name, cl.profile_image as other_user_pic,
                    c.last_message_text, c.last_message_timestamp as timestamp
             FROM conversation c
@@ -3433,20 +3973,25 @@ def get_conversations(user_id):
     
     out = []
     for r in rows:
+        participants = [
+            r["client_id"] if role == 'client' else r["other_user_id"],
+            r["other_user_id"] if role == 'client' else r["freelancer_id"]
+        ]
         out.append({
             "conversation_id": r["conversation_id"],
+            "participants": participants,
             "other_user": {
                 "id": r["other_user_id"],
                 "name": r["other_user_name"] or "User",
                 "profile_pic": r["other_user_pic"]
             },
-            "last_message": r["last_message_text"],
-            "timestamp": r["timestamp"]
+            "last_message": r.get("last_message_text", ""),
+            "updatedAt": r.get("timestamp", None)
         })
     
     return jsonify(out)
 
-@app.route("/messages", methods=["POST"])
+@app.route("/message/send", methods=["POST"])
 def send_message_unified():
     d = get_json()
     missing = require_fields(d, ["conversation_id", "sender_id", "sender_role", "message"])
@@ -3507,11 +4052,11 @@ def send_message_unified():
                 'type': 'message'
             }
             # Emit to receiver
-            socketio.emit('new_message', message_data, room=f"user_{receiver_id}")
+            socketio.emit('receiveMessage', message_data, room=f"user_{receiver_id}")
             # Emit to sender confirmation
             socketio.emit('message_sent', message_data, room=f"user_{sender_id}")
             # Emit to conversation room
-            socketio.emit('new_message', message_data, room=f"conv_{conv_id}")
+            socketio.emit('receiveMessage', message_data, room=f"conv_{conv_id}")
         except Exception as e:
             print(f'[SOCKET] Real-time delivery failed: {e}')
     
@@ -3930,6 +4475,9 @@ def client_hire_counter():
     conn.commit()
     conn.close()
 
+    if action == "ACCEPT":
+        create_project(request_id)
+
     # Send notifications for counteroffer actions
     try:
         from notification_helper import notify_client, notify_freelancer
@@ -3965,6 +4513,17 @@ def client_hire_counter():
                 )
                 
             elif action == "ACCEPT":
+                # Log transaction for agreement
+                try:
+                    from admin_db import log_transaction
+                    cur.execute("SELECT proposed_budget, final_agreed_amount FROM hire_request WHERE id=%s", (request_id,))
+                    h_res = cur.fetchone()
+                    if h_res:
+                        amt = h_res[1] or h_res[0] or 0
+                        log_transaction(freelancer_id, client_id, float(amt), "Accepted", request_id)
+                except Exception as e:
+                    print(f"Error logging accepted hire: {e}")
+
                 # Notify freelancer that client accepted their counteroffer
                 notify_freelancer(
                     freelancer_id=freelancer_id,
@@ -5999,48 +6558,97 @@ def client_projects_applicants():
         pid = int(project_id)
     except Exception:
         return jsonify({"success": False, "msg": "client_id and project_id required"}), 400
+    try:
+        payload = get_project_applications_payload(pid, cid)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "msg": "Not authorized"}), 403
+    except LookupError:
+        return jsonify({"success": False, "msg": "Project not found"}), 404
+
+
+def get_project_applications_payload(project_id, client_id=None):
+    """Return project details and all applicants for a project."""
     conn = freelancer_db()
-    from psycopg2.extras import RealDictCursor
     try:
         cur = get_dict_cursor(conn)
-        cur.execute("SELECT client_id FROM project_post WHERE id=%s", (pid,))
-        r = cur.fetchone()
-        if not r or int(r["client_id"]) != cid:
-            return jsonify({"success": False, "msg": "Not authorized"}), 403
         cur.execute("""
-            SELECT id, freelancer_id, proposal, bid_amount, status, created_at
-            FROM project_application
-            WHERE project_id=%s
-            ORDER BY created_at DESC
-        """, (pid,))
+            SELECT p.id, p.client_id, p.title, p.category, p.location, p.budget_type, p.description, p.status, p.created_at,
+                   c.name AS client_name, c.email AS client_email
+            FROM project_post p
+            LEFT JOIN client c ON c.id = p.client_id
+            WHERE p.id=%s
+        """, (project_id,))
+        project = cur.fetchone()
+        if not project:
+            raise LookupError("Project not found")
+        if client_id is not None and int(project["client_id"]) != int(client_id):
+            raise PermissionError("Not authorized")
+
+        cur.execute("""
+            SELECT pa.id, pa.project_id, pa.freelancer_id, pa.proposal, pa.bid_amount, pa.status, pa.created_at,
+                   f.name AS freelancer_name, f.email AS freelancer_email,
+                   fp.title AS freelancer_title, fp.skills AS freelancer_skills, fp.experience AS freelancer_experience
+            FROM project_application pa
+            LEFT JOIN freelancer f ON f.id = pa.freelancer_id
+            LEFT JOIN freelancer_profile fp ON fp.freelancer_id = pa.freelancer_id
+            WHERE pa.project_id=%s
+            ORDER BY pa.created_at DESC
+        """, (project_id,))
         rows = cur.fetchall()
+
         applicants = []
-        for a in rows:
-            # Get freelancer details
-            cur.execute("""
-                SELECT f.name, fp.title, fp.skills, fp.experience, f.email
-                FROM freelancer f
-                LEFT JOIN freelancer_profile fp ON f.id = fp.freelancer_id
-                WHERE f.id=%s
-            """, (a["freelancer_id"],))
-            freelancer_info = cur.fetchone()
-            
+        for row in rows:
             applicants.append({
-                "application_id": a["id"],
-                "freelancer_id": a["freelancer_id"],
-                "freelancer_name": freelancer_info["name"] if freelancer_info else "Unknown",
-                "freelancer_title": freelancer_info.get("title", ""),
-                "freelancer_skills": freelancer_info.get("skills", ""),
-                "freelancer_experience": freelancer_info.get("experience", 0),
-                "freelancer_email": freelancer_info["email"] if freelancer_info else "",
-                "proposal": a["proposal"],
-                "bid_amount": a["bid_amount"],
-                "status": a["status"],
-                "created_at": a["created_at"],
+                "application_id": row["id"],
+                "project_id": row["project_id"],
+                "freelancer_id": row["freelancer_id"],
+                "freelancer_name": row.get("freelancer_name") or "Unknown",
+                "freelancer_title": row.get("freelancer_title") or "",
+                "freelancer_skills": row.get("freelancer_skills") or "",
+                "freelancer_experience": row.get("freelancer_experience") or 0,
+                "freelancer_email": row.get("freelancer_email") or "",
+                "proposal": row.get("proposal") or "",
+                "bid_amount": row.get("bid_amount") or 0,
+                "status": row.get("status") or "PENDING",
+                "created_at": row.get("created_at"),
             })
-        return jsonify({"success": True, "applicants": applicants})
+
+        return {
+            "project": {
+                "id": project["id"],
+                "client_id": project["client_id"],
+                "client_name": project.get("client_name") or "",
+                "client_email": project.get("client_email") or "",
+                "title": project.get("title") or "",
+                "category": project.get("category") or "",
+                "location": project.get("location") or "",
+                "budget_type": project.get("budget_type") or "",
+                "description": project.get("description") or "",
+                "status": project.get("status") or "active",
+                "created_at": project.get("created_at"),
+            },
+            "applicants": applicants,
+        }
     finally:
         conn.close()
+
+
+@app.route("/applications/project/<int:project_id>", methods=["GET"])
+def applications_by_project(project_id):
+    client_id = request.args.get("client_id")
+    try:
+        cid = int(client_id) if client_id not in (None, "") else None
+    except Exception:
+        return jsonify({"success": False, "msg": "Invalid client_id"}), 400
+
+    try:
+        payload = get_project_applications_payload(project_id, cid)
+        return jsonify({"success": True, **payload})
+    except PermissionError:
+        return jsonify({"success": False, "msg": "Not authorized"}), 403
+    except LookupError:
+        return jsonify({"success": False, "msg": "Project not found"}), 404
 
 
 @app.route("/client/projects/close", methods=["POST"])
@@ -6142,7 +6750,10 @@ def client_projects_accept_application():
                     message=f'Your application for "{project_title}" was accepted!',
                     title="Application Accepted",
                     related_entity_type="project_application",
-                    related_entity_id=aid
+                    related_entity_id=aid,
+                    notification_type="HIRED",
+                    sender_id=cid,
+                    reference_id=pid,
                 )
                 
                 # Notify client about acceptance
@@ -6169,7 +6780,10 @@ def client_projects_accept_application():
                         message=f'Your application for "{project_title}" was not selected',
                         title="Application Not Selected",
                         related_entity_type="project_application",
-                        related_entity_id=aid
+                        related_entity_id=aid,
+                        notification_type="APPLICATION_UPDATE",
+                        sender_id=cid,
+                        reference_id=pid,
                     )
         except Exception as e:
             print(f"Error creating application notifications: {e}")
@@ -6246,6 +6860,63 @@ def freelancer_projects_feed():
         conn.close()
 
 
+def get_freelancer_applications_payload(freelancer_id):
+    """Return all applications submitted by a freelancer with project and client details."""
+    conn = freelancer_db()
+    try:
+        cur = get_dict_cursor(conn)
+        cur.execute("""
+            SELECT pa.id, pa.project_id, pa.freelancer_id, pa.proposal, pa.bid_amount, pa.status, pa.created_at,
+                   p.title, p.category, p.location, p.budget_type, p.description, p.client_id, p.status AS project_status,
+                   c.name AS client_name, c.email AS client_email
+            FROM project_application pa
+            JOIN project_post p ON p.id = pa.project_id
+            LEFT JOIN client c ON c.id = p.client_id
+            WHERE pa.freelancer_id=%s
+            ORDER BY pa.created_at DESC
+        """, (freelancer_id,))
+        rows = cur.fetchall()
+        applications = []
+        for row in rows:
+            applications.append({
+                "application_id": row["id"],
+                "project_id": row["project_id"],
+                "freelancer_id": row["freelancer_id"],
+                "proposal": row.get("proposal") or "",
+                "bid_amount": row.get("bid_amount") or 0,
+                "status": row.get("status") or "PENDING",
+                "created_at": row.get("created_at"),
+                "project": {
+                    "id": row["project_id"],
+                    "title": row.get("title") or "",
+                    "category": row.get("category") or "",
+                    "location": row.get("location") or "",
+                    "budget_type": row.get("budget_type") or "",
+                    "description": row.get("description") or "",
+                    "status": row.get("project_status") or "active",
+                    "client_id": row.get("client_id"),
+                    "client_name": row.get("client_name") or "",
+                    "client_email": row.get("client_email") or "",
+                },
+            })
+        return applications
+    finally:
+        conn.close()
+
+
+@app.route("/applications/freelancer", methods=["GET"])
+def applications_by_freelancer():
+    freelancer_id = request.args.get("freelancer_id", "")
+    try:
+        fid = int(freelancer_id)
+    except Exception:
+        return jsonify({"success": False, "msg": "freelancer_id required"}), 400
+
+    applications = get_freelancer_applications_payload(fid)
+    return jsonify({"success": True, "applications": applications})
+
+
+@app.route("/project/apply", methods=["POST"])
 @app.route("/freelancer/projects/apply", methods=["POST"])
 def freelancer_projects_apply():
     d = get_json()
@@ -6263,39 +6934,99 @@ def freelancer_projects_apply():
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
+        cur.execute("""
+            SELECT p.id, p.client_id, p.title, p.category, p.location, p.budget_type, p.description, p.status,
+                   c.name AS client_name, c.email AS client_email,
+                   f.name AS freelancer_name, f.email AS freelancer_email
+            FROM project_post p
+            LEFT JOIN client c ON c.id = p.client_id
+            LEFT JOIN freelancer f ON f.id = %s
+            WHERE p.id = %s
+        """, (fid, pid))
+        project_row = cur.fetchone()
+        if not project_row:
+            return jsonify({"success": False, "msg": "Project not found"}), 404
+        if str(project_row.get("status") or "").upper() not in {"ACTIVE", "OPEN"}:
+            return jsonify({"success": False, "msg": "Project is no longer open for applications"}), 400
+
         # Check if already applied
-        cur.execute("SELECT 1 FROM project_application WHERE project_id=%s AND freelancer_id=%s", (pid, fid))
-        if cur.fetchone():
-            return jsonify({"success": False, "msg": "Already applied"}), 400
+        cur.execute("""
+            SELECT id, project_id, freelancer_id, proposal, bid_amount, status, created_at
+            FROM project_application
+            WHERE project_id=%s AND freelancer_id=%s
+        """, (pid, fid))
+        existing_application = cur.fetchone()
+        if existing_application:
+            application_data = {
+                "application_id": existing_application["id"],
+                "project_id": existing_application["project_id"],
+                "freelancer_id": existing_application["freelancer_id"],
+                "proposal": existing_application.get("proposal") or "",
+                "bid_amount": existing_application.get("bid_amount") or 0,
+                "status": existing_application.get("status") or "PENDING",
+                "created_at": existing_application.get("created_at"),
+                "project": {
+                    "id": project_row["id"],
+                    "client_id": project_row["client_id"],
+                    "client_name": project_row.get("client_name") or "",
+                    "client_email": project_row.get("client_email") or "",
+                    "title": project_row.get("title") or "",
+                    "category": project_row.get("category") or "",
+                    "location": project_row.get("location") or "",
+                    "budget_type": project_row.get("budget_type") or "",
+                    "description": project_row.get("description") or "",
+                    "status": project_row.get("status") or "active",
+                },
+            }
+            return jsonify({"success": False, "msg": "Already applied", "application": application_data}), 400
         
         # Insert application
         cur.execute("""
             INSERT INTO project_application (project_id, freelancer_id, proposal, bid_amount, status, created_at)
             VALUES (%s, %s, %s, %s, 'PENDING', %s)
-            RETURNING id
+            RETURNING id, project_id, freelancer_id, proposal, bid_amount, status, created_at
         """, (pid, fid, proposal, bid_amount, now_ts()))
         app_row = cur.fetchone()
         application_id = app_row["id"] if isinstance(app_row, dict) else app_row[0]
+
+        application_data = {
+            "application_id": app_row["id"],
+            "project_id": app_row["project_id"],
+            "freelancer_id": app_row["freelancer_id"],
+            "proposal": app_row.get("proposal") or "",
+            "bid_amount": app_row.get("bid_amount") or 0,
+            "status": app_row.get("status") or "PENDING",
+            "created_at": app_row.get("created_at"),
+            "project": {
+                "id": project_row["id"],
+                "client_id": project_row["client_id"],
+                "client_name": project_row.get("client_name") or "",
+                "client_email": project_row.get("client_email") or "",
+                "title": project_row.get("title") or "",
+                "category": project_row.get("category") or "",
+                "location": project_row.get("location") or "",
+                "budget_type": project_row.get("budget_type") or "",
+                "description": project_row.get("description") or "",
+                "status": project_row.get("status") or "active",
+            },
+        }
         
         conn.commit()
+
+        try:
+            increment_job_applies(fid)
+        except Exception:
+            pass
         
         # Notify client about new application
         try:
             from notification_helper import notify_client
             
             # Get project and client details
-            cur.execute("""
-                SELECT p.title, p.client_id, f.name 
-                FROM project_post p 
-                JOIN freelancer f ON f.id = %s 
-                WHERE p.id = %s
-            """, (fid, pid))
-            result = cur.fetchone()
-            
-            if result:
-                project_title, client_id, freelancer_name = result
-                project_title = project_title or "Untitled"
-                freelancer_name = freelancer_name or "Freelancer"
+            if project_row:
+                project_title = project_row.get("title") or "Untitled"
+                client_id = project_row.get("client_id")
+                freelancer_name = project_row.get("freelancer_name") or "Freelancer"
                 
                 notify_client(
                     client_id=client_id,
@@ -6306,8 +7037,24 @@ def freelancer_projects_apply():
                 )
         except Exception as e:
             print(f"Error creating application notification: {e}")
+
+        if SOCKET_IO_ENABLED and socketio is not None:
+            socket_payload = {
+                "application": application_data,
+                "project_id": application_data["project_id"],
+                "freelancer_id": application_data["freelancer_id"],
+                "client_id": project_row.get("client_id"),
+            }
+            socketio.emit("applicationSent", socket_payload, room=f"user_{fid}")
+            if project_row.get("client_id"):
+                socketio.emit("applicationSent", socket_payload, room=f"user_{project_row['client_id']}")
         
-        return jsonify({"success": True, "msg": "Application submitted successfully", "application_id": application_id})
+        return jsonify({
+            "success": True,
+            "msg": "Application submitted successfully",
+            "application_id": application_id,
+            "application": application_data,
+        })
         
     except psycopg2.Error as e:
         print(f"Database error in project application: {type(e).__name__}: {str(e)}")
@@ -7090,6 +7837,7 @@ def client_hire_requests():
 def projects_search():
     """Search active projects by keyword across title, category, description."""
     q = request.args.get("q", "").strip()
+    freelancer_id = request.args.get("freelancer_id")
     if not q:
         return jsonify({"success": True, "projects": []})
 
@@ -7104,24 +7852,39 @@ def projects_search():
             ORDER BY created_at DESC
         """, (search_pattern, search_pattern, search_pattern))
         rows = cur.fetchall()
+        
+        # If freelancer_id provided, get their applications to mark has_applied
+        applied_project_ids = set()
+        if freelancer_id:
+            try:
+                fid = int(freelancer_id)
+                cur.execute("SELECT project_id FROM project_application WHERE freelancer_id=%s", (fid,))
+                apps = cur.fetchall()
+                for a in apps:
+                    val = a.get("project_id") if isinstance(a, dict) else a[0]
+                    if val: applied_project_ids.add(val)
+            except: pass
+
+        out = []
+        for r in rows:
+            pid = r.get("id") if isinstance(r, dict) else r[0]
+            out.append({
+                "id": pid,
+                "client_id": r.get("client_id") if isinstance(r, dict) else r[1],
+                "title": r.get("title") if isinstance(r, dict) else r[2],
+                "category": r.get("category") if isinstance(r, dict) else r[3],
+                "location": r.get("location") if isinstance(r, dict) else r[4],
+                "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+                "description": r.get("description") if isinstance(r, dict) else r[6],
+                "status": r.get("status") if isinstance(r, dict) else r[7],
+                "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
+                "has_applied": pid in applied_project_ids
+            })
+        return jsonify({"success": True, "projects": out})
     except Exception as e:
-        conn.close()
         return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
-    conn.close()
-    out = []
-    for r in rows:
-        out.append({
-            "id": r.get("id") if isinstance(r, dict) else r[0],
-            "client_id": r.get("client_id") if isinstance(r, dict) else r[1],
-            "title": r.get("title") if isinstance(r, dict) else r[2],
-            "category": r.get("category") if isinstance(r, dict) else r[3],
-            "location": r.get("location") if isinstance(r, dict) else r[4],
-            "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
-            "description": r.get("description") if isinstance(r, dict) else r[6],
-            "status": r.get("status") if isinstance(r, dict) else r[7],
-            "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
-        })
-    return jsonify({"success": True, "projects": out})
+    finally:
+        conn.close()
 
 
 # ============================================================
@@ -7229,29 +7992,45 @@ def client_get_projects():
 @app.route("/projects/all", methods=["GET"])
 def projects_all():
     """All active projects – visible to freelancers browsing opportunities."""
+    freelancer_id = request.args.get("freelancer_id")
     conn = client_db()
     cur = get_dict_cursor(conn)
     try:
         cur.execute("SELECT * FROM project_post WHERE status='active' ORDER BY created_at DESC")
         rows = cur.fetchall()
+        
+        # If freelancer_id provided, get their applications to mark has_applied
+        applied_project_ids = set()
+        if freelancer_id:
+            try:
+                fid = int(freelancer_id)
+                cur.execute("SELECT project_id FROM project_application WHERE freelancer_id=%s", (fid,))
+                apps = cur.fetchall()
+                for a in apps:
+                    val = a.get("project_id") if isinstance(a, dict) else a[0]
+                    if val: applied_project_ids.add(val)
+            except: pass
+
+        out = []
+        for r in rows:
+            pid = r.get("id") if isinstance(r, dict) else r[0]
+            out.append({
+                "id": pid,
+                "client_id": r.get("client_id") if isinstance(r, dict) else r[1],
+                "title": r.get("title") if isinstance(r, dict) else r[2],
+                "category": r.get("category") if isinstance(r, dict) else r[3],
+                "location": r.get("location") if isinstance(r, dict) else r[4],
+                "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
+                "description": r.get("description") if isinstance(r, dict) else r[6],
+                "status": r.get("status") if isinstance(r, dict) else r[7],
+                "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
+                "has_applied": pid in applied_project_ids
+            })
+        return jsonify({"success": True, "projects": out})
     except Exception as e:
+        return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+    finally:
         conn.close()
-        return jsonify({"success": False, "msg": "Database error"}), 500
-    conn.close()
-    out = []
-    for r in rows:
-        out.append({
-            "id": r.get("id") if isinstance(r, dict) else r[0],
-            "client_id": r.get("client_id") if isinstance(r, dict) else r[1],
-            "title": r.get("title") if isinstance(r, dict) else r[2],
-            "category": r.get("category") if isinstance(r, dict) else r[3],
-            "location": r.get("location") if isinstance(r, dict) else r[4],
-            "budget_type": r.get("budget_type") if isinstance(r, dict) else r[5],
-            "description": r.get("description") if isinstance(r, dict) else r[6],
-            "status": r.get("status") if isinstance(r, dict) else r[7],
-            "created_at": r.get("created_at") if isinstance(r, dict) else r[8],
-        })
-    return jsonify({"success": True, "projects": out})
 
 
 # ============================================================
@@ -7336,6 +8115,44 @@ def freelancer_notifications_by_id():
     return jsonify({"success": True, "notifications": out})
 
 
+@app.route("/api/notifications/read-all/<int:user_id>", methods=["PUT"])
+def api_notifications_mark_all_read(user_id):
+    from notification_helper import mark_all_notifications_as_read, get_unread_notification_count_for_role
+
+    recipient_role = request.headers.get("X-USER-ROLE", "freelancer").strip().lower() or "freelancer"
+    updated = mark_all_notifications_as_read(user_id, recipient_role=recipient_role)
+    unread_count = get_unread_notification_count_for_role(user_id, recipient_role=recipient_role)
+    return jsonify({"success": True, "updated": updated, "unread_count": unread_count})
+
+
+@app.route("/api/notifications/<int:notification_id>/read", methods=["PUT"])
+def api_notifications_mark_read(notification_id):
+    from notification_helper import mark_notification_as_read, get_unread_notification_count_for_role
+
+    row = mark_notification_as_read(notification_id)
+    if not row:
+        return jsonify({"success": False, "msg": "Notification not found"}), 404
+
+    unread_count = get_unread_notification_count_for_role(row["user_id"], recipient_role=row.get("recipient_role") or "freelancer")
+    return jsonify({"success": True, "notification_id": row["notification_id"], "unread_count": unread_count})
+
+
+@app.route("/api/notifications/<int:user_id>", methods=["GET"])
+def api_notifications(user_id):
+    from notification_helper import get_notifications, get_unread_notification_count_for_role
+
+    recipient_role = request.headers.get("X-USER-ROLE", "freelancer").strip().lower() or "freelancer"
+    generate_action_required_notifications(user_id)
+    notifications = get_notifications(user_id, recipient_role=recipient_role, limit=100)
+    unread_count = get_unread_notification_count_for_role(user_id, recipient_role=recipient_role)
+
+    return jsonify({
+        "success": True,
+        "unread_count": unread_count,
+        "notifications": notifications,
+    })
+
+
 # ============================================================
 # PHASE 4: PAYMENTS, EXECUTION AND REVIEWS
 # ============================================================
@@ -7407,6 +8224,85 @@ def payment_create_order():
     })
 
 
+def send_payment_receipt_emails(hire_id, order_id, payment_id, amount, currency="INR", status="Paid"):
+    """Send payment receipt emails to both client and freelancer."""
+    conn = freelancer_db()
+    try:
+        cur = get_dict_cursor(conn)
+        cur.execute("""
+            SELECT hr.id, hr.job_title, hr.client_id, hr.freelancer_id,
+                   c.name AS client_name, c.email AS client_email,
+                   f.name AS freelancer_name, f.email AS freelancer_email
+            FROM hire_request hr
+            LEFT JOIN client c ON c.id = hr.client_id
+            LEFT JOIN freelancer f ON f.id = hr.freelancer_id
+            WHERE hr.id = %s
+        """, (hire_id,))
+        row = cur.fetchone()
+        if not row:
+            return
+
+        amount_value = float(amount or 0)
+        currency = currency or "INR"
+        paid_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        job_title = row.get("job_title") or f"Hire Request #{hire_id}"
+        client_name = row.get("client_name") or "Client"
+        freelancer_name = row.get("freelancer_name") or "Freelancer"
+
+        client_body = f"""
+Hi {client_name},
+
+Your payment was received successfully on GigBridge.
+
+Transaction details:
+- Transaction ID: {payment_id}
+- Order ID: {order_id}
+- Hire Request ID: {hire_id}
+- Project / Job: {job_title}
+- Amount Debited: {currency} {amount_value:,.2f}
+- Status: {status}
+- Paid At: {paid_at}
+- Freelancer: {freelancer_name}
+
+Please keep this email for your records.
+"""
+
+        freelancer_body = f"""
+Hi {freelancer_name},
+
+You have received a funded booking on GigBridge.
+
+Transaction details:
+- Transaction ID: {payment_id}
+- Order ID: {order_id}
+- Hire Request ID: {hire_id}
+- Project / Job: {job_title}
+- Amount Received: {currency} {amount_value:,.2f}
+- Status: {status}
+- Paid At: {paid_at}
+- Client: {client_name}
+
+Please keep this email for your records.
+"""
+
+        if row.get("client_email"):
+            send_email(
+                row["client_email"],
+                f"GigBridge Payment Receipt - TXN {payment_id}",
+                client_body.strip(),
+                related_project_id=hire_id
+            )
+        if row.get("freelancer_email"):
+            send_email(
+                row["freelancer_email"],
+                f"GigBridge Payment Confirmation - TXN {payment_id}",
+                freelancer_body.strip(),
+                related_project_id=hire_id
+            )
+    finally:
+        conn.close()
+
+
 @app.route("/payment/verify", methods=["POST"])
 def payment_verify():
     """Verify Razorpay payment signature after successful client transaction."""
@@ -7432,6 +8328,15 @@ def payment_verify():
         conn = freelancer_db()
         cur = get_dict_cursor(conn)
         try:
+            cur.execute("""
+                SELECT hr.client_id, hr.freelancer_id,
+                       COALESCE(hr.final_agreed_amount, hr.proposed_budget, pr.amount) AS amount
+                FROM hire_request hr
+                LEFT JOIN payment_records pr ON pr.hire_id = hr.id AND pr.razorpay_order_id = %s
+                WHERE hr.id = %s
+            """, (order_id, hire_id))
+            hire_row = cur.fetchone()
+
             # Update payment record
             cur.execute(
                 """UPDATE payment_records 
@@ -7441,12 +8346,46 @@ def payment_verify():
             )
             # Update hire request
             cur.execute("UPDATE hire_request SET payment_status = 'paid' WHERE id = %s", (hire_id,))
+            if hire_row:
+                log_transaction(
+                    hire_row.get("freelancer_id"),
+                    hire_row.get("client_id"),
+                    float(hire_row.get("amount") or 0),
+                    "Paid",
+                    hire_id
+                )
             conn.commit()
         except Exception as e:
             conn.rollback()
             conn.close()
             return jsonify({"success": False, "msg": "Database error"}), 500
         conn.close()
+        try:
+            send_payment_receipt_emails(
+                hire_id=hire_id,
+                order_id=order_id,
+                payment_id=payment_id,
+                amount=hire_row.get("amount") if hire_row else 0,
+                currency="INR",
+                status="Paid"
+            )
+        except Exception as e:
+            logger.warning(f"Payment receipt emails failed: {e}")
+        try:
+            from notification_helper import notify_freelancer
+            if hire_row:
+                notify_freelancer(
+                    freelancer_id=hire_row.get("freelancer_id"),
+                    sender_id=hire_row.get("client_id"),
+                    notification_type="PAYMENT_RECEIVED",
+                    title="Payment Received",
+                    message=f"Payment of INR {float(hire_row.get('amount') or 0):,.2f} was completed for your gig.",
+                    related_entity_type="payment",
+                    related_entity_id=hire_id,
+                    reference_id=hire_id,
+                )
+        except Exception as e:
+            logger.warning(f"Payment notification failed: {e}")
         return jsonify({"success": True, "msg": "Payment verified successfully"})
     else:
         return jsonify({"success": False, "msg": "Invalid signature"}), 400
@@ -7617,6 +8556,19 @@ if __name__ == "__main__":
         # Ensure database exists
         if ensure_database_exists():
             logger.info("Database validation passed")
+            # Create core tables
+            try:
+                create_tables()
+                logger.info("Core database tables initialized")
+            except Exception as e:
+                logger.error(f"Core table creation failed: {e}")
+
+            # Create admin tables
+            try:
+                ensure_admin_tables()
+                logger.info("Admin database tables initialized")
+            except Exception as e:
+                logger.error(f"Admin table creation failed: {e}")
         else:
             logger.error("Failed to ensure database exists")
             
@@ -7633,6 +8585,10 @@ if __name__ == "__main__":
     
     logger.info("Starting Flask server on http://0.0.0.0:5000")
     
+    # Start background scheduler
+    import threading
+    threading.Thread(target=run_scheduler, daemon=True).start()
+
     # Start with Socket.IO if available
     if SOCKET_IO_ENABLED and socketio is not None:
         logger.info("Starting server with Socket.IO support")
@@ -7643,7 +8599,10 @@ if __name__ == "__main__":
             SOCKET_IO_REALLY_WORKING = False
             logger.error(f"Socket.IO server failed: {e}")
             logger.info("Falling back to regular Flask server")
-            app.run(host='0.0.0.0', port=5000, debug=False)
+        if SOCKET_IO_ENABLED:
+            socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+        else:
+            app.run(host='0.0.0.0', port=5000, debug=True)
     else:
         logger.info("Starting server without Socket.IO support")
         app.run(host='0.0.0.0', port=5000, debug=False)

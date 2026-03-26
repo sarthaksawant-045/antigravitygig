@@ -45,10 +45,25 @@ def handle_disconnect():
 def handle_register_user(data):
     """Register user with their ID"""
     try:
+        if data is None:
+            emit('error', {'message': 'No data provided'})
+            return
+            
+        if isinstance(data, str):
+            import json
+            try:
+                data = json.loads(data)
+            except Exception:
+                pass
+                
+        if not isinstance(data, dict):
+            emit('error', {'message': 'Invalid data format'})
+            return
+
         user_id = str(data.get('user_id'))
         user_role = data.get('role', 'unknown')  # 'client' or 'freelancer'
         
-        if not user_id:
+        if not user_id or user_id == 'None':
             emit('error', {'message': 'User ID required'})
             return
         
@@ -58,6 +73,11 @@ def handle_register_user(data):
         # Join user-specific room
         room = f"user_{user_id}"
         join_room(room)
+        
+        # Join admins room if role is admin
+        if user_role == 'admin':
+            join_room('admins')
+            print(f'[SOCKET] Admin {user_id} joined room "admins"')
         
         print(f'[SOCKET] User {user_id} ({user_role}) registered with sid {request.sid}')
         
@@ -75,19 +95,36 @@ def handle_register_user(data):
         })
         
     except Exception as e:
-        print(f'[SOCKET] Error registering user: {e}')
-        emit('error', {'message': 'Registration failed'})
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f'[SOCKET] Error registering user: {str(e)}\n{error_msg}')
+        emit('error', {'message': f'Registration failed: {str(e)}'})
 
-@socketio.on('send_message')
+@socketio.on('sendMessage')
 def handle_send_message(data):
     """Handle real-time message sending"""
     try:
+        if data is None:
+            emit('error', {'message': 'No data provided'})
+            return
+            
+        if isinstance(data, str):
+            import json
+            try:
+                data = json.loads(data)
+            except Exception:
+                pass
+                
+        if not isinstance(data, dict):
+            emit('error', {'message': 'Invalid data format'})
+            return
+
         sender_id = str(data.get('sender_id'))
         receiver_id = str(data.get('receiver_id'))
         message_text = data.get('text', '').strip()
         sender_role = data.get('sender_role', 'unknown')
         
-        if not all([sender_id, receiver_id, message_text]):
+        if not all([sender_id, receiver_id, message_text]) or sender_id == 'None':
             emit('error', {'message': 'Missing required fields'})
             return
         
@@ -106,7 +143,7 @@ def handle_send_message(data):
         
         # Send to receiver's room if they're online
         receiver_room = f"user_{receiver_id}"
-        socketio.emit('new_message', message, room=receiver_room)
+        socketio.emit('receiveMessage', message, room=receiver_room)
         
         # Send confirmation to sender
         sender_room = f"user_{sender_id}"
@@ -116,11 +153,11 @@ def handle_send_message(data):
         conv_id = data.get('conversation_id')
         if conv_id:
             conversation_room = f"conv_{conv_id}"
-            socketio.emit('new_message', message, room=conversation_room)
+            socketio.emit('receiveMessage', message, room=conversation_room)
         else:
             # Fallback to legacy room naming if no conversation_id provided
             conversation_room = f"conv_{min(sender_id, receiver_id)}_{max(sender_id, receiver_id)}"
-            socketio.emit('new_message', message, room=conversation_room)
+            socketio.emit('receiveMessage', message, room=conversation_room)
         
     except Exception as e:
         print(f'[SOCKET] Error sending message: {e}')

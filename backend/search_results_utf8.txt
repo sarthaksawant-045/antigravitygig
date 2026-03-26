@@ -1,0 +1,81 @@
+﻿196: return jsonify({"success": False, "msg": "Server error occurred", "error": str(e)}), 500
+254: @app.errorhandler(500)
+258: logger.error(f"500 Internal Error: {err_tb}")
+264: }), 500
+275: "msg": "Server error occurred",
+278: }), 500
+376: GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback")
+645: return jsonify({"success": False, "msg": "Database operation failed"}), 500
+661: return jsonify({"success": False, "msg": "Server error occurred (661)"}), 500
+743: return jsonify({"success": False, "msg": "Server error occurred (743)"}), 500
+790: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+794: return jsonify({"success": False, "msg": "Server error occurred (794)"}), 500
+879: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+883: return jsonify({"success": False, "msg": "Server error occurred (883)"}), 500
+933: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+937: return jsonify({"success": False, "msg": "Server error occurred (937)"}), 500
+977: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+981: return jsonify({"success": False, "msg": "Server error occurred (981)"}), 500
+1031: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+1035: return jsonify({"success": False, "msg": "Server error occurred (1035)"}), 500
+1075: return jsonify({"success": False, "msg": "Database error occurred"}), 500
+1079: return jsonify({"success": False, "msg": "Server error occurred (1079)"}), 500
+1219: return jsonify({"success": False, "msg": "Server error occurred (1219)"}), 500
+1244: return jsonify({"success": False, "msg": "Server error occurred (1244)"}), 500
+1294: }), 500
+1378: }), 500
+1767: return jsonify({"success": False, "msg": "Database error"}), 500
+2118: ), 500
+2491: return jsonify({"success": False, "msg": str(e)}), 500
+2496: return jsonify({"success": False, "msg": "Failed to create/get conversation"}), 500
+2604: return jsonify({"success": False, "msg": "Failed to send message"}), 500
+2708: return jsonify({"success": False, "msg": "Failed to send message"}), 500
+3687: return jsonify({"success": False, "msg": str(e)}), 500
+3745: return jsonify({"success": False, "msg": str(e)}), 500
+3818: return jsonify({"success": False, "msg": str(e)}), 500
+3910: return jsonify({"success": False, "msg": str(e)}), 500
+3938: return jsonify({"success": False, "msg": str(e)}), 500
+3963: return jsonify({"success": False, "msg": str(e)}), 500
+4203: return jsonify({"success": False, "msg": str(e)}), 500
+4240: return jsonify({"success": False, "msg": str(e)}), 500
+4282: return jsonify({"success": False, "msg": str(e)}), 500
+4357: return jsonify({"success": False, "msg": str(e)}), 500
+4385: return jsonify({"success": False, "msg": str(e)}), 500
+4413: return jsonify({"success": False, "msg": str(e)}), 500
+4508: return jsonify({"success": False, "msg": str(e)}), 500
+4549: return jsonify({"success": False, "msg": str(e)}), 500
+4583: return jsonify({"success": False, "msg": str(e)}), 500
+4625: return jsonify({"success": False, "msg": str(e)}), 500
+4644: }), 500
+5116: return jsonify({"success": False, "msg": str(e)}), 500
+5928: }), 500
+6071: }), 500
+6439: return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+6444: return jsonify({"success": False, "msg": f"Server error: {str(e)}"}), 500
+6562: return jsonify({"success": False, "msg": str(e)}), 500
+6621: return jsonify({"success": False, "msg": f"Failed to save verification data: {str(e)}"}), 500
+6666: return jsonify({"success": False, "msg": str(e)}), 500
+6954: return jsonify({"success": False, "msg": str(e)}), 500
+6989: return jsonify({"success": False, "msg": str(e)}), 500
+7025: return jsonify({"success": False, "msg": str(e)}), 500
+7059: return jsonify({"success": False, "msg": str(e)}), 500
+7078: return jsonify({"success": False, "msg": str(e)}), 500
+7097: return jsonify({"success": False, "msg": str(e)}), 500
+7129: return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+7232: return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+7312: return jsonify({"success": False, "msg": f"Database error: {str(e)}"}), 500
+7334: return jsonify({"success": False, "msg": "Database error"}), 500
+7362: return jsonify({"success": False, "msg": "Database error"}), 500
+7406: return jsonify({"success": False, "msg": "Database error"}), 500
+7445: return jsonify({"success": False, "msg": "Database error"}), 500
+7521: return jsonify({"success": False, "msg": f"Payment error: {str(e)}"}), 500
+7571: return jsonify({"success": False, "msg": "Database error"}), 500
+7605: return jsonify({"success": False, "msg": "Database error"}), 500
+7636: return jsonify({"success": False, "msg": "Database error"}), 500
+7693: return jsonify({"success": False, "msg": "Database error"}), 500
+7727: return jsonify({"success": False, "msg": "Database errors"}), 500
+7770: logger.info("Starting Flask server on http://0.0.0.0:5000")
+7777: socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+7783: socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
+7785: app.run(host='0.0.0.0', port=5000, debug=True)
+7788: app.run(host='0.0.0.0', port=5000, debug=False)

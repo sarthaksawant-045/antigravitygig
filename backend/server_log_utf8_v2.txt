@@ -1,0 +1,212 @@
+﻿python : D:\gigbridge\a
+ntigravitygig\backend\i
+ntent_parser_llm.py:11:
+ FutureWarning: 
+At line:1 char:1
++ python app.py > 
+server_log.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (D:\gigbridge\   
+ an...FutureWarning    
+: :String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+
+All support for the 
+`google.generativeai` 
+package has ended. It 
+will no longer be 
+receiving 
+updates or bug fixes. 
+Please switch to the 
+`google.genai` package 
+as soon as possible.
+See README for more 
+details:
+
+https://github.com/goog
+le-gemini/deprecated-ge
+nerative-ai-python/blob
+/main/README.md
+
+  import 
+google.generativeai as 
+genai
+INFO:faiss.loader:Loadi
+ng faiss with AVX2 
+support.
+INFO:faiss.loader:Succe
+ssfully loaded faiss 
+with AVX2 support.
+Server initialized for 
+threading.
+INFO:engineio.server:Se
+rver initialized for 
+threading.
+INFO:__main__:[SOCKET] 
+Socket.IO initialized 
+with Flask app
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+C:\Users\gaura\AppData\
+Roaming\Python\Python31
+4\site-packages\flask_l
+imiter\_extension.py:36
+4: UserWarning: Using 
+the in-memory storage 
+for tracking rate 
+limits as no storage 
+was explicitly 
+specified. This is not 
+recommended for 
+production use. See: ht
+tps://flask-limiter.rea
+dthedocs.io#configuring
+-a-storage-backend for 
+documentation about 
+configuring the 
+storage backend.
+  warnings.warn(
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:__main__:Starting 
+GigBridge backend 
+server...
+INFO:__main__:Testing 
+database connection...
+INFO:postgres_config:Da
+tabase 'gigbridge' 
+already exists
+INFO:__main__:Database 
+validation passed
+INFO:postgres_config:Co
+nnecting to 
+PostgreSQL: localhost:5
+432/gigbridge
+INFO:postgres_config:Po
+stgreSQL connection 
+successful
+INFO:postgres_config:Da
+tabase connection test 
+passed: PostgreSQL 
+16.13, compiled by 
+Visual C++ build 194...
+INFO:__main__:Database 
+connection test passed
+INFO:__main__:Starting 
+Flask server on 
+http://0.0.0.0:5000
+INFO:__main__:Starting 
+server with Socket.IO 
+support
+[SOCKET] Socket.IO initialized successfully
+ * Serving Flask app 'app'
+ * Debug mode: off
+INFO:werkzeug:[31m[1m
+WARNING: This is a 
+development server. Do 
+not use it in a 
+production deployment. 
+Use a production WSGI 
+server instead.[0m
+ * Running on all 
+addresses (0.0.0.0)
+ * Running on 
+http://127.0.0.1:5000
+ * Running on http://19
+2.168.1.47:5000
+INFO:werkzeug:[33mPres
+s CTRL+C to quit[0m

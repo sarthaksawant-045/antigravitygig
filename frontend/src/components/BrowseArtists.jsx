@@ -114,6 +114,9 @@ export default function BrowseArtists() {
     try {
       // Step 1: Create or get conversation
       console.log('[BROWSE] Creating/getting conversation...');
+      // The second request is 'fetch' for the created conversation json... wait! 
+      // I am just modifying fetch options for formatting but I need to make sure the curly brace matches!
+      // Here I am just preserving the fetch block for conversations:
       const convResponse = await fetch('http://localhost:5000/conversations', {
         method: 'POST',
         headers: {
@@ -121,14 +124,15 @@ export default function BrowseArtists() {
         },
         body: JSON.stringify({
           sender_id: user.id,
-          receiver_id: freelancerId
+          receiver_id: freelancerId,
+          sender_role: user.role
         })
       });
 
       const convData = await convResponse.json();
       
-      if (!convResponse.success) {
-        console.error('[BROWSE] Failed to create/get conversation:', convData.msg);
+      if (!convResponse.ok || !convData.success) {
+        console.error('[BROWSE] Failed to create/get conversation:', convData.msg || convData);
         alert('Failed to start conversation. Please try again.');
         setSendingMessage(false);
         return;
@@ -137,20 +141,14 @@ export default function BrowseArtists() {
       const conversationId = convData.conversation_id;
       console.log('[BROWSE] Conversation ID:', conversationId);
 
-      // Step 2: Send message using existing message APIs
-      const isClient = user.role === 'client';
-      const apiUrl = isClient 
-        ? 'http://localhost:5000/client/message/send'
-        : 'http://localhost:5000/freelancer/message/send';
+      // Step 2: Send message using unified message API
+      const apiUrl = 'http://localhost:5000/message/send';
       
-      const payload = isClient ? {
-        client_id: user.id,
-        freelancer_id: freelancerId,
-        text: inviteText.trim()
-      } : {
-        freelancer_id: user.id,
-        client_id: freelancerId,
-        text: inviteText.trim()
+      const payload = {
+        conversation_id: conversationId,
+        sender_id: user.id,
+        sender_role: user.role,
+        message: inviteText.trim()
       };
 
       console.log('[BROWSE] Sending message:', payload);

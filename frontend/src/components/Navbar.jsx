@@ -41,12 +41,14 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (user.isAuthenticated) {
-      getNotifications().then((data) => {
-        setUnreadCount(data.filter(n => !n.read).length);
-      });
+    if (user.isAuthenticated && user?.id) {
+      getNotifications(user.id)
+        .then((response) => {
+          setUnreadCount(response.unread_count || 0);
+        })
+        .catch(() => setUnreadCount(0));
     }
-  }, [user.isAuthenticated, location.pathname]);
+  }, [user.isAuthenticated, user?.id, location.pathname]);
 
   const isArtistDashboard = location.pathname.startsWith("/artist/") || location.pathname === "/dashboard";
   if (isArtistDashboard) return null;

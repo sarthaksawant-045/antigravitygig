@@ -37,20 +37,23 @@ export default function MessagesPage() {
         });
 
       // Set up event listeners
-      socketService.on('new_message', handleNewMessage);
+      socketService.on('receiveMessage', handleNewMessage);
       socketService.on('user_status', handleUserStatus);
 
       return () => {
-        socketService.off('new_message', handleNewMessage);
+        socketService.off('receiveMessage', handleNewMessage);
         socketService.off('user_status', handleUserStatus);
         socketService.disconnect();
       };
     }
-  }, [user]);
+  }, [user.id, user.isAuthenticated]);
 
   // Handle incoming real-time messages
   const handleNewMessage = (message) => {
     console.log('[MSG] Real-time message received:', message);
+    
+    // Ignore echo messages that we already sent optimistically
+    if (String(message.sender_id) === String(user.id)) return;
     
     const convId = message.conversation_id;
     if (!convId) return;
@@ -61,6 +64,7 @@ export default function MessagesPage() {
       ...prev,
       [convIdStr]: [...(prev[convIdStr] || []), {
         id: message.id,
+        senderId: message.sender_id,
         sender: message.sender_role === 'freelancer' ? 'freelancer' : 'client',
         text: message.text,
         timestamp: new Date(message.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -92,7 +96,7 @@ export default function MessagesPage() {
 
       try {
         console.log('[MSG] Fetching conversations for user:', user.id);
-        const response = await fetch(`http://localhost:5000/conversations/${user.id}?role=freelancer`);
+        const response = await fetch(`http://localhost:5000/conversation/${user.id}?role=freelancer`);
         const data = await response.json();
         
         if (response.ok) {
@@ -132,12 +136,14 @@ export default function MessagesPage() {
 
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:5000/message/history?client_id=${selectedConvId}&freelancer_id=${user.id}`);
+        if (!selectedConv?.conversation_id) return;
+        const response = await fetch(`http://localhost:5000/message/${selectedConv.conversation_id}`);
         const data = await response.json();
         
         if (response.ok && data.success) {
           const transformedMessages = data.messages.map(msg => ({
             id: msg.id || `${msg.timestamp}_${msg.sender_id}`,
+            senderId: msg.sender_id,
             sender: msg.sender_role === 'freelancer' ? 'freelancer' : 'client',
             text: msg.text,
             timestamp: new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -173,13 +179,16 @@ export default function MessagesPage() {
 
     try {
       console.log('[MSG] Fetching messages for conversation:', clientId);
-      const response = await fetch(`http://localhost:5000/message/history?client_id=${clientId}&freelancer_id=${user.id}`);
+      const conv = conversations.find(c => c.id === clientId.toString() || c.id === clientId);
+      if (!conv || !conv.conversation_id) return;
+      const response = await fetch(`http://localhost:5000/message/${conv.conversation_id}`);
       const data = await response.json();
       
       if (response.ok && data.success) {
         // Transform API response to match UI structure
         const transformedMessages = data.messages.map(msg => ({
           id: msg.id || `${msg.timestamp}_${msg.sender_id}`,
+          senderId: msg.sender_id,
           sender: msg.sender_role === 'freelancer' ? 'freelancer' : 'client',
           text: msg.text,
           timestamp: new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -220,36 +229,29 @@ export default function MessagesPage() {
   const handleSendMessage = async (text) => {
     if (!selectedConvId || !user.isAuthenticated || !user.id) return;
 
-    // Try WebSocket first, fallback to HTTP
-    if (socketConnected && selectedConv?.conversation_id) {
-      const success = socketService.sendMessage(selectedConvId, text, selectedConv.conversation_id);
-      if (success) {
-        console.log('[MSG] Message sent via WebSocket');
-        
-        // Optimistic update
-        const newMessage = {
-          id: Date.now().toString(),
-          sender: 'freelancer',
-          text,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        
-        setMessages(prev => ({
-          ...prev,
-          [selectedConvId]: [...(prev[selectedConvId] || []), newMessage]
-        }));
-        
-        setConversations(prev => prev.map(c => 
-          c.id === selectedConvId ? { ...c, lastMessage: text, time: 'Just now' } : c
-        ));
-        return;
-      }
-    }
+    // Optimistic update
+    const tempId = Date.now().toString();
+    const newMessage = {
+      id: tempId,
+      senderId: user.id,
+      sender: 'freelancer',
+      text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    setMessages(prev => ({
+      ...prev,
+      [selectedConvId]: [...(prev[selectedConvId] || []), newMessage]
+    }));
+    
+    setConversations(prev => prev.map(c => 
+      c.id === selectedConvId ? { ...c, lastMessage: text, time: 'Just now' } : c
+    ));
 
     // Fallback to HTTP
     try {
       console.log('[MSG] Sending message via HTTP fallback');
-      const response = await fetch('http://localhost:5000/messages', {
+      const response = await fetch('http://localhost:5000/message/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -266,24 +268,7 @@ export default function MessagesPage() {
       
       if (response.ok && data.success) {
         console.log('[MSG] Message sent successfully via HTTP');
-        
-        // Optimistic update - add message to UI immediately
-        const newMessage = {
-          id: Date.now().toString(),
-          sender: 'freelancer',
-          text,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        
-        setMessages(prev => ({
-          ...prev,
-          [selectedConvId]: [...(prev[selectedConvId] || []), newMessage]
-        }));
-        
-        // Update last message in conversation list
-        setConversations(prev => prev.map(c => 
-          c.id === selectedConvId ? { ...c, lastMessage: text, time: 'Just now' } : c
-        ));
+        // The message was already added optimistically above
       } else {
         console.error('[MSG] Failed to send message:', data.msg);
         alert('Failed to send message. Please try again.');
@@ -389,7 +374,30 @@ export default function MessagesPage() {
         <div className="db-shell">
           <DashboardSidebar active={activeSidebar} onSelect={setActiveSidebar} />
           <main className="db-main messages-container">
-            <div className="loading-spinner">Loading conversations...</div>
+            <div className="messages-skeleton">
+              <div className="skeleton-list">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="skeleton-list-item">
+                    <div className="skeleton skeleton-avatar"></div>
+                    <div style={{ flex: 1 }}>
+                      <div className="skeleton skeleton-title"></div>
+                      <div className="skeleton skeleton-subtitle"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="skeleton-chat">
+                <div className="skeleton-chat-header">
+                  <div className="skeleton skeleton-avatar"></div>
+                  <div style={{ flex: 1 }}>
+                    <div className="skeleton skeleton-title" style={{ width: '30%', height: '16px' }}></div>
+                  </div>
+                </div>
+                <div className="skeleton skeleton-bubble" style={{ alignSelf: 'flex-start', width: '60%' }}></div>
+                <div className="skeleton skeleton-bubble" style={{ alignSelf: 'flex-end', width: '50%', background: '#eef2ff' }}></div>
+                <div className="skeleton skeleton-bubble" style={{ alignSelf: 'flex-start', width: '70%' }}></div>
+              </div>
+            </div>
           </main>
         </div>
       </div>
@@ -433,6 +441,7 @@ export default function MessagesPage() {
             <div className={`chat-panel ${isMobileListOpen ? 'mobile-hide' : ''}`}>
               {selectedConv ? (
                 <ChatWindow 
+                  currentUserId={user.id}
                   conversation={selectedConv}
                   messages={messages[selectedConvId] || []}
                   onSend={handleSendMessage}

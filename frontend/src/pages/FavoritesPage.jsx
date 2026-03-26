@@ -63,9 +63,19 @@ export default function FavoritesPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', fontSize: '18px', color: '#64748b' }}>
-        Loading favorites...
-      </div>
+      <main className="ba-wrap" style={{ marginTop: '24px' }}>
+        <header className="ba-header">
+          <div className="skeleton skeleton-title"></div>
+          <div className="skeleton skeleton-subtitle"></div>
+        </header>
+        <section className="ba-grid" style={{ gridTemplateColumns: '1fr', marginTop: '24px' }}>
+          <div className="ba-results">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="ba-card skeleton" style={{ height: '180px', marginBottom: '16px', borderRadius: '16px' }}></div>
+            ))}
+          </div>
+        </section>
+      </main>
     );
   }
 

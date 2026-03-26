@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function ChatWindow({ conversation, messages, onSend, onVoiceCall, onVideoCall, onBack }) {
+export default function ChatWindow({ currentUserId, conversation, messages, onSend, onVoiceCall, onVideoCall, onBack }) {
   const [text, setText] = useState('');
   const scrollRef = useRef(null);
 
@@ -39,7 +39,7 @@ export default function ChatWindow({ conversation, messages, onSend, onVoiceCall
 
       <div className="chat-messages" ref={scrollRef}>
         {messages.map(msg => (
-          <div key={msg.id} className={`msg-bubble-wrap ${msg.sender === 'freelancer' ? 'sent' : 'received'}`}>
+          <div key={msg.id} className={`msg-bubble-wrap ${String(msg.senderId) === String(currentUserId) ? 'sent' : 'received'}`}>
             <div className="msg-bubble">
               {msg.text}
             </div>

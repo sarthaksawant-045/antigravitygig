@@ -129,7 +129,21 @@ const SettingsPage = () => {
         <div className="db-shell">
           <DashboardSidebar active={activeSidebar} onSelect={setActiveSidebar} />
           <main className="db-main settings-page">
-            <div className="loading-spinner">Loading settings...</div>
+            <div className="settings-header">
+              <div className="skeleton skeleton-title"></div>
+              <div className="skeleton skeleton-subtitle"></div>
+            </div>
+            <div className="settings-container">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="settings-card" style={{ padding: '24px' }}>
+                  <div className="skeleton skeleton-title" style={{ width: '40%', marginBottom: '20px' }}></div>
+                  <div style={{ display: 'grid', gap: '16px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '100%', height: '40px' }}></div>
+                    <div className="skeleton skeleton-text" style={{ width: '100%', height: '40px' }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </main>
         </div>
       </div>

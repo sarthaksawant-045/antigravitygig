@@ -25,11 +25,25 @@ export default function ArtistDashboard() {
     let mounted = true;
     (async () => {
       const d = await artistService.getDashboard(user.id);
-      const b = await artistService.getBookings(user.id);
+      const projRes = await artistService.getContractProjects(user.id);
       const a = await artistService.getActivity(user.id);
       if (!mounted) return;
       setDash(d);
-      setBookings(b.bookings || []);
+      
+      // Map contract projects to dashboard booking format
+      if (projRes.success) {
+        const mappedBookings = projRes.projects.map(p => ({
+          id: p.id,
+          event: p.title || 'Gig Project',
+          client: p.client_name || 'Client',
+          date: p.start_date,
+          value: p.agreed_price,
+          status: p.status, // ACCEPTED, IN_PROGRESS, COMPLETED, VERIFIED
+          progress: p.status === 'VERIFIED' ? 100 : p.status === 'COMPLETED' ? 80 : p.status === 'IN_PROGRESS' ? 50 : 20
+        }));
+        setBookings(mappedBookings);
+      }
+      
       setActivity(a.items || []);
     })();
     return () => { mounted = false; };
@@ -41,6 +55,34 @@ export default function ArtistDashboard() {
     const base = dash?.progress?.completeness ?? 0.5;
     return Math.round((base + catScore) * 100);
   }, [dash]);
+
+  const handleComplete = async (projectId) => {
+    if (!window.confirm("Mark this project as completed?")) return;
+    try {
+      const res = await artistService.completeProject(user.id, projectId, "Completed via dashboard", "");
+      if (res.success) {
+        alert("Project marked as completed!");
+        // Refresh projects
+        const projRes = await artistService.getContractProjects(user.id);
+        if (projRes.success) {
+          const mappedBookings = projRes.projects.map(p => ({
+            id: p.id,
+            event: p.title || 'Gig Project',
+            client: p.client_name || 'Client',
+            date: p.start_date,
+            value: p.agreed_price,
+            status: p.status,
+            progress: p.status === 'VERIFIED' ? 100 : p.status === 'COMPLETED' ? 80 : p.status === 'IN_PROGRESS' ? 50 : 20
+          }));
+          setBookings(mappedBookings);
+        }
+      } else {
+        alert(res.msg || "Failed to mark as completed.");
+      }
+    } catch (err) {
+      alert("Error completing project.");
+    }
+  };
 
   const stats = dash?.stats || { earnings: 0, bookings: 0, requests: 0, successRate: 0, growthText: {} };
 
@@ -78,15 +120,48 @@ export default function ArtistDashboard() {
 
           <section className="db-section">
             <div className="db-section-title">Upcoming Performances</div>
-            {filteredBookings.map((b) => (
+            {filteredBookings.length === 0 ? (
+              <p style={{ padding: '20px', color: '#64748b' }}>No upcoming bookings or active projects found.</p>
+            ) : filteredBookings.map((b) => (
               <div key={b.id} className="db-booking">
                 <div className="db-booking-info">
                   <div className="db-booking-title">{b.event}</div>
                   <div className="db-booking-sub">{b.client} • {b.date}</div>
+                  <div style={{ marginTop: '8px' }}>
+                    <span style={{ 
+                      fontSize: '0.7rem', 
+                      padding: '2px 8px', 
+                      borderRadius: '12px', 
+                      background: b.status === 'VERIFIED' ? '#dcfce7' : b.status === 'COMPLETED' ? '#f1f5f9' : '#fef9c3',
+                      color: b.status === 'VERIFIED' ? '#166534' : b.status === 'COMPLETED' ? '#475569' : '#854d0e',
+                      fontWeight: 600,
+                      textTransform: 'uppercase'
+                    }}>
+                      {b.status}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ minWidth: 180 }}>
+                <div style={{ minWidth: 180, textAlign: 'right' }}>
                   <div className="db-booking-val">₹{b.value?.toLocaleString?.() || b.value}</div>
                   <div className="db-booking-bar"><div className="db-booking-fill" style={{ width: `${b.progress}%` }} /></div>
+                  {(b.status === 'ACCEPTED' || b.status === 'IN_PROGRESS') && (
+                    <button 
+                      onClick={() => handleComplete(b.id)}
+                      style={{ 
+                        marginTop: '8px', 
+                        padding: '4px 12px', 
+                        fontSize: '0.75rem', 
+                        background: '#2563eb', 
+                        color: 'white', 
+                        border: 'none', 
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      Mark Complete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
