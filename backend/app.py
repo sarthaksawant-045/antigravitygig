@@ -9122,7 +9122,9 @@ if __name__ == "__main__":
         logger.error("Please ensure PostgreSQL is running and configured correctly")
         logger.error("Server will start but database operations may fail")
     
-    logger.info("Starting Flask server on http://0.0.0.0:5000")
+    port = int(os.environ.get("PORT", 5000))
+    debug_mode = os.environ.get("ENV") != "production"
+    logger.info(f"Starting Flask server on http://0.0.0.0:{port}")
     
     # Start background scheduler
     import threading
@@ -9133,15 +9135,12 @@ if __name__ == "__main__":
         logger.info("Starting server with Socket.IO support")
         try:
             SOCKET_IO_REALLY_WORKING = True
-            socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+            socketio.run(app, host='0.0.0.0', port=port, debug=debug_mode, allow_unsafe_werkzeug=True)
         except Exception as e:
             SOCKET_IO_REALLY_WORKING = False
             logger.error(f"Socket.IO server failed: {e}")
             logger.info("Falling back to regular Flask server")
-        if SOCKET_IO_ENABLED:
-            socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
-        else:
-            app.run(host='0.0.0.0', port=5000, debug=True)
+            app.run(host='0.0.0.0', port=port, debug=debug_mode)
     else:
         logger.info("Starting server without Socket.IO support")
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        app.run(host='0.0.0.0', port=port, debug=debug_mode)

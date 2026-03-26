@@ -85,8 +85,6 @@ export default function Navbar() {
                 <li className={location.pathname === "/messages" ? "active" : ""} onClick={() => navigate("/messages")}>Messages</li>
               </>
             )}
-            {/* Browse Artists is always visible */}
-            <li className={location.pathname === "/browse-artists" ? "active" : ""} onClick={() => navigate("/browse-artists")}>Browse Artists</li>
           </ul>
         )}
 
@@ -146,7 +144,6 @@ export default function Navbar() {
         <div className="mobile-menu" onClick={(e)=>e.stopPropagation()}>
           <button className={`mobile-item ${location.pathname === '/my-projects' ? 'active' : ''}`} onClick={() => { navigate("/my-projects"); setNavOpen(false); }}>My Projects</button>
           <button className={`mobile-item ${location.pathname === '/client/post-project' ? 'active' : ''}`} onClick={() => { navigate("/client/post-project"); setNavOpen(false); }}>Post a Project</button>
-          <button className={`mobile-item ${location.pathname === '/browse-artists' ? 'active' : ''}`} onClick={() => { navigate("/browse-artists"); setNavOpen(false); }}>Browse Artists</button>
           <button className={`mobile-item ${location.pathname === '/payment' ? 'active' : ''}`} onClick={() => { navigate("/payment"); setNavOpen(false); }}>Payments</button>
           <button className={`mobile-item ${location.pathname === '/messages' ? 'active' : ''}`} onClick={() => { navigate("/messages"); setNavOpen(false); }}>Messages</button>
           {!user.isAuthenticated && (
