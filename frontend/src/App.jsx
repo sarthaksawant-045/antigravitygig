@@ -84,7 +84,7 @@ const AppContent = () => {
     <>
       {!isAdminRoute && <Navbar />}
       <Routes>
-        <Route path="/" element={<PublicRoute><><Hero /><StatsStrip /></></PublicRoute>} />
+        <Route path="/" element={<><Hero /><StatsStrip /></>} />
         <Route path="/signup/:role" element={<PublicRoute><AuthSignup /></PublicRoute>} />
         <Route path="/login/:role" element={<PublicRoute><AuthLogin /></PublicRoute>} />
         <Route path="/forgot-password/:role" element={<ForgotPassword />} />
@@ -190,7 +190,7 @@ const AppContent = () => {
         <Route path="/admin/payments" element={<AdminPayments />} />
         <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<><Hero /><StatsStrip /></>} />
       </Routes>
     </>
   );

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getNotifications, markAsRead, markAllAsRead } from '../services/notificationService';
+import { getNotifications, markAsRead, markAllAsRead, getUnreadCount } from '../services/notificationService';
 import socketService from '../services/socketService';
 
 export default function NotificationsPage() {
@@ -31,16 +31,21 @@ export default function NotificationsPage() {
     if (!user?.id) return;
 
     setLoading(true);
-    getNotifications(user.id)
-      .then((response) => {
-        setNotifications(response.notifications || []);
-        setUnreadCount(response.unread_count || 0);
-      })
-      .catch(() => {
-        setNotifications([]);
-        setUnreadCount(0);
-      })
-      .finally(() => setLoading(false));
+    
+    // Parallel fetch for better performance
+    Promise.all([
+      getNotifications(user.id),
+      getUnreadCount(user.id)
+    ])
+    .then(([notifRes, countRes]) => {
+      setNotifications(notifRes.notifications || []);
+      setUnreadCount(countRes.unread_count || 0);
+    })
+    .catch(() => {
+      setNotifications([]);
+      setUnreadCount(0);
+    })
+    .finally(() => setLoading(false));
   }, [user?.id]);
 
   useEffect(() => {
@@ -57,11 +62,11 @@ export default function NotificationsPage() {
     };
 
     connectPromise.finally(() => {
-      socketService.on('notificationCreated', handleNotificationCreated);
+      socketService.on('new_notification', handleNotificationCreated);
     });
 
     return () => {
-      socketService.off('notificationCreated', handleNotificationCreated);
+      socketService.off('new_notification', handleNotificationCreated);
     };
   }, [user?.id, user?.role]);
 

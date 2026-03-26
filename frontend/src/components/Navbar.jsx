@@ -1,7 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getNotifications } from "../services/notificationService.js";
+import { getUnreadCount } from "../services/notificationService.js";
 import "./Navbar.css"; // styling for badge and nav buttons
 
 // Notification Icon SVG
@@ -42,7 +42,7 @@ export default function Navbar() {
 
   useEffect(() => {
     if (user.isAuthenticated && user?.id) {
-      getNotifications(user.id)
+      getUnreadCount(user.id)
         .then((response) => {
           setUnreadCount(response.unread_count || 0);
         })
@@ -74,11 +74,17 @@ export default function Navbar() {
 
         {!isFreelancerOnboarding && (
           <ul className="nav-links">
-            <li className={location.pathname === "/my-projects" ? "active" : ""} onClick={() => navigate("/my-projects")}>My Projects</li>
-            <li className={location.pathname === "/client/post-project" ? "active" : ""} onClick={() => navigate("/client/post-project")}>Post a Project</li>
+            {/* Show client-specific items only when logged in as client */}
+            {user.isAuthenticated && (user.role === "client" || user.role === "Client") && (
+              <>
+                <li className={location.pathname === "/my-projects" ? "active" : ""} onClick={() => navigate("/my-projects")}>My Projects</li>
+                <li className={location.pathname === "/client/post-project" ? "active" : ""} onClick={() => navigate("/client/post-project")}>Post a Project</li>
+                <li className={location.pathname === "/payment" ? "active" : ""} onClick={() => navigate("/payment")}>Payments</li>
+                <li className={location.pathname === "/messages" ? "active" : ""} onClick={() => navigate("/messages")}>Messages</li>
+              </>
+            )}
+            {/* Browse Artists is always visible */}
             <li className={location.pathname === "/browse-artists" ? "active" : ""} onClick={() => navigate("/browse-artists")}>Browse Artists</li>
-            <li className={location.pathname === "/payment" ? "active" : ""} onClick={() => navigate("/payment")}>Payments</li>
-            <li className={location.pathname === "/messages" ? "active" : ""} onClick={() => navigate("/messages")}>Messages</li>
           </ul>
         )}
 

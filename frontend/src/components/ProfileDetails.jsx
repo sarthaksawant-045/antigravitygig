@@ -36,11 +36,11 @@ export default function ProfileDetails({ profile, onToggleAvailability }) {
         </div>
         <div className="detail-item">
           <span className="detail-label">Phone</span>
-          <span className="detail-value">{profile.phone}</span>
+          <span className="detail-value">{profile.phone || "Not Available"}</span>
         </div>
         <div className="detail-item">
-          <span className="detail-label">{pricingLabel}</span>
-          <span className="detail-value">₹{pricingValue}{pricingLabel === "Per Hour" ? "/hour" : ""}</span>
+          <span className="detail-label">Price</span>
+          <span className="detail-value">{profile.price_display}</span>
         </div>
         <div className="detail-item full-width">
           <span className="detail-label">Bio</span>

@@ -1,7 +1,7 @@
 import { useAuth } from "../context/AuthContext.jsx";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getNotifications } from "../services/notificationService.js";
+import { getUnreadCount } from "../services/notificationService.js";
 
 const MENU = [
   { key: "dashboard", label: "Dashboard", ico: "▦", path: "/artist/dashboard" },
@@ -26,7 +26,7 @@ export default function DashboardSidebar({ active = "dashboard", onSelect }) {
 
   useEffect(() => {
     if (!user?.id) return;
-    getNotifications(user.id)
+    getUnreadCount(user.id)
       .then((response) => setNotificationCount(response.unread_count || 0))
       .catch(() => setNotificationCount(0));
   }, [user?.id]);

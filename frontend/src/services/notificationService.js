@@ -20,9 +20,9 @@ export const getNotifications = async (userId) => {
   }
 
   try {
-    return await api.get(`/api/notifications/${userId}`, {
-      headers: getAuthHeaders(),
-    });
+    const headers = getAuthHeaders();
+    const role = headers['X-USER-ROLE'] || 'freelancer';
+    return await api.get(`/notifications?user_id=${userId}&role=${role}`);
   } catch (error) {
     throw error;
   }
@@ -34,9 +34,7 @@ export const markAsRead = async (notificationId) => {
   }
 
   try {
-    return await api.put(`/api/notifications/${notificationId}/read`, {}, {
-      headers: getAuthHeaders(),
-    });
+    return await api.post('/notifications/mark-read', { notification_id: notificationId });
   } catch (error) {
     throw error;
   }
@@ -48,9 +46,23 @@ export const markAllAsRead = async (userId) => {
   }
 
   try {
-    return await api.put(`/api/notifications/read-all/${userId}`, {}, {
-      headers: getAuthHeaders(),
-    });
+    const headers = getAuthHeaders();
+    const role = headers['X-USER-ROLE'] || 'freelancer';
+    return await api.post('/notifications/mark-all-read', { user_id: userId, role: role });
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const getUnreadCount = async (userId) => {
+  if (!userId) {
+    return { success: true, unread_count: 0 };
+  }
+
+  try {
+    const headers = getAuthHeaders();
+    const role = headers['X-USER-ROLE'] || 'freelancer';
+    return await api.get(`/notifications/unread-count?user_id=${userId}&role=${role}`);
   } catch (error) {
     throw error;
   }

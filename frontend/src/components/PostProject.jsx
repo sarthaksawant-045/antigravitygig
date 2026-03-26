@@ -30,7 +30,6 @@ export default function PostProject() {
     title: "",
     category: "",
     location: "",
-    budgetType: "",
     description: "",
   });
   const [loading, setLoading] = useState(false);
@@ -63,7 +62,7 @@ export default function PostProject() {
       const res = await clientService.postProject(user.id, form);
       if (res.success) {
         setSuccess(`Project posted! (ID: ${res.project_id})`);
-        setForm({ title: "", category: "", location: "", budgetType: "", description: "" });
+        setForm({ title: "", category: "", location: "", description: "" });
         setTimeout(() => navigate("/client/projects"), 1800);
       } else {
         setError(res.msg || "Failed to post project. Please try again.");
@@ -137,31 +136,15 @@ export default function PostProject() {
               </div>
             </div>
 
-            <div className="post-project-row">
-              <div className="post-project-field">
-                <label className="post-project-label">Location</label>
-                <input
-                  type="text"
-                  value={form.location}
-                  onChange={set("location")}
-                  placeholder="City or area"
-                  className="post-project-input"
-                />
-              </div>
-
-              <div className="post-project-field">
-                <label className="post-project-label">Budget Type</label>
-                <select 
-                  value={form.budgetType} 
-                  onChange={set("budgetType")} 
-                  className="post-project-input"
-                >
-                  <option value="">Select budget type…</option>
-                  <option value="fixed">Fixed Price</option>
-                  <option value="hourly">Hourly Rate</option>
-                  <option value="negotiable">Negotiable</option>
-                </select>
-              </div>
+            <div className="post-project-field">
+              <label className="post-project-label">Location</label>
+              <input
+                type="text"
+                value={form.location}
+                onChange={set("location")}
+                placeholder="City or area"
+                className="post-project-input"
+              />
             </div>
 
             <div className="post-project-field">

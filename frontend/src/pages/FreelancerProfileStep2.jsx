@@ -30,6 +30,7 @@ export default function FreelancerProfileStep2() {
     skills: "",
     bio: "",
     dob: "",
+    phone: "",
   });
 
   const [pricing, setPricing] = useState({
@@ -109,6 +110,7 @@ export default function FreelancerProfileStep2() {
         location: basic.location || "",
         dob: form.dob || "",
         pincode: basic.pincode || "",
+        phone: form.phone || "",
         
         // Map pricing fields expected by robust backend endpoint
         pricing_type: pricing.type,
@@ -287,6 +289,16 @@ export default function FreelancerProfileStep2() {
             type="date"
             value={form.dob}
             onChange={onField("dob")}
+          />
+        </label>
+
+        <label>
+          <span>Phone</span>
+          <input
+            type="text"
+            placeholder="Enter phone number"
+            value={form.phone}
+            onChange={onField("phone")}
           />
         </label>
         

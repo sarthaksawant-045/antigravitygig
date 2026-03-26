@@ -7,6 +7,7 @@ import ProfileDetails from "../components/ProfileDetails";
 import CategoryDynamicSection from "../components/CategoryDynamicSection";
 import PortfolioPreview from "../components/PortfolioPreview";
 import EditProfileModal from "../components/EditProfileModal";
+import { freelancerService } from "../services/freelancerService";
 import { useAuth } from "../context/AuthContext.jsx";
 import "./dashboard.css";
 import "./freelancerProfile.css";
@@ -37,9 +38,10 @@ export default function FreelancerProfilePage() {
             id: data.id,
             name: data.name || user.name,
             email: data.email || user.email,
-            phone: data.phone || data.phone_number || data.contact_number || "Not Available",
+            phone: data.phone || "Not Available",
             location: data.location || "",
             hourlyRate: data.hourly_rate || data.min_budget || 0,
+            price_display: data.price_display || "Not specified",
             price_per_hour: data.hourly_rate || 0,
             price_per_person: data.per_person_rate || 0,
             price_per_event: data.fixed_price || data.starting_price || data.min_budget || 0,
@@ -79,9 +81,40 @@ export default function FreelancerProfilePage() {
     fetchProfile();
   }, [user]);
 
-  const handleUpdateProfile = (updatedData) => {
-    setProfile(prev => ({ ...prev, ...updatedData }));
-    setIsEditModalOpen(false);
+  const handleUpdateProfile = async (updatedData) => {
+    try {
+      const payload = {
+        freelancer_id: user.id,
+        ...updatedData,
+        // Ensure availability status is correctly mapped if needed
+        availability_status: updatedData.availability ? "AVAILABLE" : "UNAVAILABLE"
+      };
+      
+      const res = await freelancerService.createProfile(payload);
+      if (res.success) {
+        setProfile(prev => ({ ...prev, ...updatedData }));
+        setIsEditModalOpen(false);
+      } else {
+        alert(res.msg || "Failed to update profile");
+      }
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      alert("Failed to update profile");
+    }
+  };
+
+  const handleToggleAvailability = async (val) => {
+    try {
+      const res = await freelancerService.updateAvailability(user.id, val ? "AVAILABLE" : "UNAVAILABLE");
+      if (res.success) {
+        setProfile(prev => ({ ...prev, availability: val }));
+      } else {
+        alert(res.msg || "Failed to update availability");
+      }
+    } catch (err) {
+      console.error("Error updating availability:", err);
+      alert("Failed to update availability");
+    }
   };
 
   if (loading) {
@@ -172,7 +205,7 @@ export default function FreelancerProfilePage() {
 
           <div className="profile-content-card">
             <ProfileHeader profile={displayProfile} />
-            <ProfileDetails profile={displayProfile} onToggleAvailability={(val) => setProfile(prev => ({...prev, availability: val}))} />
+            <ProfileDetails profile={displayProfile} onToggleAvailability={handleToggleAvailability} />
             
             <div className="profile-section-divider" />
             
