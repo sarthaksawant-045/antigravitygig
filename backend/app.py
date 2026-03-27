@@ -27,7 +27,7 @@ from payment_routes import payment_bp
 from ticket_routes import ticket_bp
 import logging
 from flask_cors import CORS
-app = Flask(_name_)
+app = Flask(__name__)
 
 CORS(app, origins=[
     "https://antigravitygig.netlify.app/"
