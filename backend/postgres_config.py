@@ -19,13 +19,16 @@ def get_postgres_config():
     """Get PostgreSQL configuration from environment variables"""
     database_url = os.getenv("DATABASE_URL")
     if database_url:
-        # Production/hosted PostgreSQL via DATABASE_URL with SSL enforced.
+        # Production/hosted PostgreSQL via DATABASE_URL
+        # SSL is usually required for cloud providers like Render/AWS
         return {
             "dsn": database_url,
-            "sslmode": "require",
+            "sslmode": os.getenv("DB_SSL_MODE", "require"),
             "options": "-c client_encoding=UTF8",
         }
 
+    # Development fallback
+    logger.info("DATABASE_URL not found, falling back to local PostgreSQL settings")
     return {
         'host': os.getenv('POSTGRES_HOST', 'localhost'),
         'port': int(os.getenv('POSTGRES_PORT', '5432')),
@@ -100,8 +103,8 @@ def ensure_database_exists():
     """Ensure the database exists, create if necessary"""
     config = get_postgres_config()
 
-    # Hosted providers like Render already provision the database referenced
-    # by DATABASE_URL, so there is nothing to create here.
+    # Hosted providers like Render pre-provision the database.
+    # We just need to verify we can connect to it.
     if "dsn" in config:
         try:
             conn = psycopg2.connect(
@@ -114,9 +117,12 @@ def ensure_database_exists():
             return True
         except Exception as e:
             logger.error(f"Failed to verify DATABASE_URL connection: {e}")
+            # If we're on Render, we shouldn't attempt the 'postgres' fallback
+            # because we don't have superuser access to create databases.
             return False
 
-    db_name = config['database']
+    # Local development fallback: try to create the database if it doesn't exist
+    db_name = config.get('database', 'gigbridge')
     
     try:
         # Connect to default 'postgres' database to create our database
@@ -142,7 +148,7 @@ def ensure_database_exists():
         return True
         
     except Exception as e:
-        logger.error(f"Failed to ensure database exists: {e}")
+        logger.error(f"Failed to ensure database exists locally: {e}")
         return False
 
 def client_db():

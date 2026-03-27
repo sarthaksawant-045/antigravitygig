@@ -221,9 +221,15 @@ app.config["JSON_AS_ASCII"] = False
 app.config["JSONIFY_MIMETYPE"] = "application/json"
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
     app.json.ensure_ascii = False
+# Configure CORS - support local dev and optional production frontend URL
+allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    allowed_origins.append(frontend_url)
+
 CORS(
     app,
-    resources={r"/*": {"origins": ["http://localhost:5173", "http://127.0.0.1:5173"]}},
+    resources={r"/*": {"origins": allowed_origins}},
     supports_credentials=True,
 )
 
@@ -451,7 +457,10 @@ OTP_TTL_SECONDS = 5 * 60  # 5 minutes
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://127.0.0.1:5000/auth/google/callback")
+
+# Google Redirect URI: prioritize explicit env var, then derive from BACKEND_URL, else fallback to localhost
+backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:5000").rstrip("/")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", f"{backend_url}/auth/google/callback")
 
 # state -> { role, created_at, done, result }
 GOOGLE_OAUTH_STATES = {}

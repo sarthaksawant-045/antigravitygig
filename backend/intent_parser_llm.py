@@ -8,19 +8,22 @@ import json
 import re
 from typing import Dict, Optional, List
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 
 # Import existing category validation
 from categories import get_all_categories, is_valid_category
 
-# Configure Gemini if available
+# Configure Gemini Client if available
 if genai:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        client = genai.Client(api_key=api_key)
+    else:
+        client = None
 else:
-    model = None
+    client = None
 
 # Get valid categories from existing codebase
 VALID_CATEGORIES = get_all_categories()
@@ -109,7 +112,7 @@ class LLMIntentParser:
     """LLM-based intent parser for natural language queries"""
     
     def __init__(self):
-        self.model = model
+        self.client = client
         self.system_prompt = SYSTEM_PROMPT
     
     def parse(self, message: str, user_id: int = None, role: str = None) -> Optional[Dict]:
@@ -128,9 +131,9 @@ class LLMIntentParser:
             return None
             
         try:
-            # Check if model is available
-            if not self.model:
-                print("Gemini model not available")
+            # Check if client is available
+            if not self.client:
+                print("Gemini client not available")
                 return None
                 
             # Check if API key is available
@@ -146,8 +149,9 @@ class LLMIntentParser:
                 user_prompt = user_prompt.replace("USER_ID_PLACEHOLDER", str(user_id))
             
             # Generate response
-            response = self.model.generate_content(
-                user_prompt + "\n\nUser query:\n'" + message + "'\n\nOutput:"
+            response = self.client.models.generate_content(
+                model="gemini-1.5-flash",
+                contents=user_prompt + "\n\nUser query:\n'" + message + "'\n\nOutput:"
             )
             
             # Extract and parse JSON response
