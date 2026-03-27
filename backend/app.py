@@ -26,6 +26,12 @@ from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
 from ticket_routes import ticket_bp
 import logging
+from flask_cors import CORS
+app = Flask(_name_)
+
+CORS(app, origins=[
+    "https://antigravitygig.netlify.app/"
+])
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
