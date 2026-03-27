@@ -35,7 +35,8 @@ def _get_model():
     if _model is not None:
         return _model
 
-    if SentenceTransformer is None:
+    st_class = _get_st_class()
+    if st_class is None:
         raise RuntimeError("sentence-transformers not installed. Run: pip install sentence-transformers")
 
     _ensure_store()
@@ -52,7 +53,7 @@ def _get_model():
         with open(MODEL_PATH, "w", encoding="utf-8") as f:
             json.dump({"model": model_name}, f)
 
-    _model = SentenceTransformer(model_name)
+    _model = st_class(model_name)
     return _model
 
 
@@ -80,13 +81,14 @@ def load_or_build():
     Uses IndexIDMap2 so we can update by freelancer_id later.
     """
     global _index
-    if faiss is None:
+    f = _get_faiss()
+    if f is None:
         raise RuntimeError("faiss not installed. Run: pip install faiss-cpu")
 
     _ensure_store()
 
     if os.path.exists(INDEX_PATH):
-        _index = faiss.read_index(INDEX_PATH)
+        _index = f.read_index(INDEX_PATH)
         return _index
 
     # build new
@@ -107,9 +109,9 @@ def load_or_build():
     pairs = [_make_text_row(r) for r in rows if r and r[0] is not None]
     if not pairs:
         # empty index
-        base = faiss.IndexFlatIP(384)
-        _index = faiss.IndexIDMap2(base)
-        faiss.write_index(_index, INDEX_PATH)
+        base = f.IndexFlatIP(384)
+        _index = f.IndexIDMap2(base)
+        f.write_index(_index, INDEX_PATH)
         return _index
 
     ids = np.array([p[0] for p in pairs], dtype="int64")
