@@ -1278,13 +1278,9 @@ def client_send_otp():
             if conn:
                 conn.close()
 
-        # Try to send email, but don't fail if email service is down
-        try:
-            send_otp_email(email, otp)
-        except Exception as email_error:
-            # Log email error but don't expose to user
-            import logging
-            logging.getLogger(__name__).warning(f"Email sending failed for {email}: {type(email_error).__name__}")
+        # Send email in background to prevent blocking the response
+        import threading
+        threading.Thread(target=send_otp_email, args=(email, otp), daemon=True).start()
 
         return jsonify({"success": True, "msg": "OTP sent"})
         
@@ -1349,10 +1345,9 @@ def client_verify_otp():
         cur.execute("DELETE FROM client_otp WHERE email=%s", (email,))
         conn.commit()
 
-        try:
-            send_login_email(email, name, "Client", "signup")
-        except Exception as e:
-            pass  # Email failure shouldn't break signup
+        # Send email in background
+        import threading
+        threading.Thread(target=send_login_email, args=(email, name, "Client", "signup"), daemon=True).start()
 
         return jsonify({
             "success": True,
@@ -1427,11 +1422,9 @@ def freelancer_send_otp():
         if conn:
             conn.close()
 
-    try:
-        send_otp_email(email, otp)
-    except Exception as e:
-        # Continue even if email fails
-        pass
+    # Send email in background to prevent blocking the response
+    import threading
+    threading.Thread(target=send_otp_email, args=(email, otp), daemon=True).start()
 
     return jsonify({"success": True, "msg": "OTP sent"})
 
@@ -1481,10 +1474,9 @@ def freelancer_verify_otp():
         cur.execute("DELETE FROM freelancer_otp WHERE email=%s", (email,))
         conn.commit()
 
-        try:
-            send_login_email(email, name, "Freelancer", "signup")
-        except Exception as e:
-            pass  # Email failure shouldn't break signup
+        # Send email in background
+        import threading
+        threading.Thread(target=send_login_email, args=(email, name, "Freelancer", "signup"), daemon=True).start()
 
         return jsonify({
             "success": True,
