@@ -30,7 +30,7 @@ class SocketService {
       const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
       this.socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
-        timeout: 10000,
+        timeout: 60000,
         reconnection: true,
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
