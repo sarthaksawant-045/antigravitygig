@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://localhost:5000";
+const DEFAULT_API_BASE_URL = "https://antigravitygig-2.onrender.com";
 
 function normalizeBaseUrl(url) {
   return (url || DEFAULT_API_BASE_URL).replace(/\/+$/, "");

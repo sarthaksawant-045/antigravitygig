@@ -39,7 +39,7 @@ export default function FreelancerProfilePage() {
       }
 
       try {
-        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`);
+        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`);
         const data = await response.json();
         
         if (data.success) {

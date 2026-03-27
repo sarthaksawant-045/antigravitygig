@@ -42,7 +42,7 @@ const SettingsPage = () => {
       }
 
       try {
-        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`);
+        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`);
         const data = await response.json();
         
         if (data.success) {
@@ -88,7 +88,7 @@ const SettingsPage = () => {
 
       // Update freelancer profile
       if (user.isAuthenticated && user.id) {
-        const response = await fetch(`http://localhost:5000/freelancer/profile/${user.id}`, {
+        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

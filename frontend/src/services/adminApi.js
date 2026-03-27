@@ -1,5 +1,5 @@
 
-const API_URL = 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
 
 const getAdminToken = () => localStorage.getItem('admin_token');
 
@@ -34,7 +34,7 @@ const adminFetch = async (endpoint, options = {}) => {
   } catch (error) {
     console.error(`[AdminAPI] Fetch error for ${endpoint}:`, error);
     if (error.message.includes('Failed to fetch')) {
-      throw new Error('Network error or CORS blocked. Please ensure the backend is running on http://localhost:5000 and matches the allowed origins.');
+      throw new Error(`Network error or CORS blocked. Please ensure the backend is running on ${API_URL} and matches the allowed origins.`);
     }
     throw error;
   }

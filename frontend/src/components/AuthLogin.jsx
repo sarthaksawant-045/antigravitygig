@@ -10,7 +10,7 @@ export default function AuthLogin() {
   const isFreelancer = role !== "client";
   const switchRole = (next) => navigate(`/login/${next}`);
 
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "https://antigravitygig-2.onrender.com";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);

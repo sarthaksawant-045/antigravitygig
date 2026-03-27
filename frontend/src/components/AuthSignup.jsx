@@ -5,7 +5,7 @@ import { authService } from "../services";
 export default function AuthSignup() {
   const { role = "freelancer" } = useParams();
   const navigate = useNavigate();
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "https://antigravitygig-2.onrender.com";
   const isFreelancer = role !== "client";
   const switchRole = (next) => navigate(`/signup/${next}`);
 

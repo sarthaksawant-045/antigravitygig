@@ -27,7 +27,8 @@ class SocketService {
     return new Promise((resolve, reject) => {
       console.log(`[SOCKET] Connecting to server as ${userRole} ${userId}...`);
       
-      this.socket = io('http://localhost:5000', {
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
+      this.socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         timeout: 10000,
         reconnection: true,
