@@ -7,8 +7,10 @@ razorpay
 numpy
 faiss-cpu
 sentence-transformers
-google-generativeai
+google-genai
 psycopg2-binary
 flask-socketio
 gunicorn
-
+flask-limiter
+flask-jwt-extended
+marshmallow

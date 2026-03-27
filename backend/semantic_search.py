@@ -4,15 +4,29 @@ import json
 import sqlite3
 import numpy as np
 
-try:
-    import faiss
-except Exception:
-    faiss = None
+# Lazy loading to prevent slow startup
+_faiss = None
+_ST = None
 
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:
-    SentenceTransformer = None
+def _get_faiss():
+    global _faiss
+    if _faiss is None:
+        try:
+            import faiss
+            _faiss = faiss
+        except Exception:
+            pass
+    return _faiss
+
+def _get_st_class():
+    global _ST
+    if _ST is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _ST = SentenceTransformer
+        except Exception:
+            pass
+    return _ST
 
 
 STORE_DIR = "gigbridge_store"
