@@ -16,12 +16,32 @@ export default function AuthSignup() {
     password: "",
     otp: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleGoogleSignup = () => {
-    window.location.href = `${apiBase}/auth/google?role=${role}`;
+  const handleGoogleSignup = async () => {
+    setGoogleLoading(true);
+    setError("");
+    try {
+      let response = await fetch(`${apiBase}/auth/google?role=${role}`);
+      let data = await response.json();
+
+      if (response.status === 404) {
+        response = await fetch(`${apiBase}/auth/google/start?role=${role}`);
+        data = await response.json();
+      }
+
+      if (!response.ok || data?.success === false || !data?.auth_url) {
+        throw new Error(data?.msg || "Google signup is not available right now.");
+      }
+      window.location.href = data.auth_url;
+    } catch (err) {
+      setError(err.message || "Google signup failed. Please try again.");
+      setGoogleLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -60,12 +80,15 @@ export default function AuthSignup() {
     setLoading(true);
     setError("");
     try {
-      await authService.verifyOTPAndSignup({
-        name: formData.name,
-        email: formData.email,
-        password: formData.password,
-        otp: formData.otp,
-      }, role);
+      await authService.verifyOTPAndSignup(
+        {
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          otp: formData.otp,
+        },
+        role
+      );
       localStorage.setItem(`gb_has_account_${role}`, "1");
       if (role === "client") {
         localStorage.removeItem("client_profile_done");
@@ -99,7 +122,7 @@ export default function AuthSignup() {
             </button>
           </div>
 
-          {error && <div style={{color: 'red', marginBottom: '1rem'}}>{error}</div>}
+          {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <label>
@@ -137,14 +160,31 @@ export default function AuthSignup() {
             </label>
             <label>
               <span>Password</span>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleInputChange}
-                required
-              />
+              <div className="password-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                />
+                <span
+                  className="eye-icon"
+                  onClick={() => setShowPassword(!showPassword)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setShowPassword((prev) => !prev);
+                    }
+                  }}
+                >
+                  {showPassword ? "🙈" : "👁"}
+                </span>
+              </div>
             </label>
             <div className="otp-row">
               <label>
@@ -172,9 +212,9 @@ export default function AuthSignup() {
               {loading ? "Creating..." : "Create Account"}
             </button>
 
-            <button type="button" className="auth-google" onClick={handleGoogleSignup}>
+            <button type="button" className="auth-google" onClick={handleGoogleSignup} disabled={googleLoading}>
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" />
-              Continue with Google
+              {googleLoading ? "Connecting to Google..." : "Continue with Google"}
             </button>
           </form>
 

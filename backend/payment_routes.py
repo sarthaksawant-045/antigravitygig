@@ -5,10 +5,13 @@ Modular extension - does not change existing hire/signup/login flows.
 import time
 import hmac
 import hashlib
+import os
 from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
+from html import escape
 from database import freelancer_db, client_db, get_dict_cursor, mark_job_completed, activate_freelancer_premium_subscription
 from admin_db import log_transaction
+import payment_config
 from payment_config import (
     RAZORPAY_KEY_ID,
     RAZORPAY_KEY_SECRET,
@@ -38,26 +41,112 @@ def _now():
     return int(time.time())
 
 
+def _get_razorpay_credentials():
+    key_id = (
+        os.getenv("RAZORPAY_KEY_ID")
+        or os.getenv("RAZORPAY_TEST_KEY_ID")
+        or getattr(payment_config, "RAZORPAY_KEY_ID", "")
+    )
+    key_secret = (
+        os.getenv("RAZORPAY_KEY_SECRET")
+        or os.getenv("RAZORPAY_TEST_KEY_SECRET")
+        or getattr(payment_config, "RAZORPAY_KEY_SECRET", "")
+    )
+    return key_id, key_secret
+
+
 def _get_razorpay_client():
-    if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+    key_id, key_secret = _get_razorpay_credentials()
+    if not key_id or not key_secret:
         return None
     try:
         import razorpay
-        return razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        return razorpay.Client(auth=(key_id, key_secret))
     except Exception:
         return None
 
 
 def _verify_razorpay_signature(order_id, payment_id, signature):
-    if not RAZORPAY_KEY_SECRET:
+    _, key_secret = _get_razorpay_credentials()
+    if not key_secret:
         return False
     body = f"{order_id}|{payment_id}"
     expected = hmac.new(
-        RAZORPAY_KEY_SECRET.encode("utf-8"),
+        key_secret.encode("utf-8"),
         body.encode("utf-8"),
         hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def _format_subscription_validity(premium_valid_until):
+    if not premium_valid_until:
+        return "90 days"
+    try:
+        return premium_valid_until.strftime("%d %b %Y")
+    except Exception:
+        return str(premium_valid_until)
+
+
+def _build_subscription_email_html(freelancer_name, plan_name, amount, validity, activated_date):
+    return f"""
+    <html>
+    <body style="font-family: Arial, Helvetica, sans-serif; background:#f5f7fb; padding:20px;">
+      <div style="max-width:600px; margin:auto; background:#ffffff; border-radius:10px; padding:20px; border:1px solid #e5e7eb;">
+        <h2 style="color:#2563eb; margin-top:0;">🎉 Subscription Activated!</h2>
+
+        <p>Hi <b>{escape(freelancer_name)}</b>,</p>
+
+        <p>Your subscription has been successfully activated.</p>
+
+        <div style="margin:20px 0; padding:15px; background:#f1f5f9; border-radius:8px;">
+          <p><b>Plan:</b> {escape(plan_name)}</p>
+          <p><b>Amount Paid:</b> ₹{escape(str(amount))}</p>
+          <p><b>Validity:</b> {escape(validity)}</p>
+          <p><b>Date:</b> {escape(activated_date)}</p>
+        </div>
+
+        <p style="color:#16a34a;"><b>You're now ready to explore more opportunities and grow your profile 🚀</b></p>
+
+        <hr style="margin:20px 0; border:none; border-top:1px solid #e5e7eb;" />
+
+        <p style="font-size:12px; color:#6b7280;">
+          Thank you for choosing GigBridge 💙
+        </p>
+      </div>
+    </body>
+    </html>
+    """
+
+
+def _send_subscription_activation_email(updated_user, plan_name, amount, validity):
+    email = (updated_user or {}).get("email")
+    if not email:
+        return False
+
+    from app import send_email
+
+    freelancer_name = (updated_user or {}).get("name") or "Freelancer"
+    activated_date = datetime.now(timezone.utc).strftime("%d %b %Y")
+    subject = "🎉 Subscription Activated Successfully – GigBridge"
+    body = (
+        f"Hi {freelancer_name},\n\n"
+        "Your subscription has been successfully activated.\n\n"
+        f"Plan: {plan_name}\n"
+        f"Amount Paid: ₹{amount}\n"
+        f"Validity: {validity}\n"
+        f"Date: {activated_date}\n\n"
+        "You're now ready to explore more opportunities and grow your profile.\n\n"
+        "Thank you for choosing GigBridge."
+    )
+    html_body = _build_subscription_email_html(
+        freelancer_name=freelancer_name,
+        plan_name=plan_name,
+        amount=amount,
+        validity=validity,
+        activated_date=activated_date,
+    )
+    return send_email(email, subject, body, html_body=html_body)
 
 
 # ============================================================
@@ -667,7 +756,7 @@ def payment_subscription_create_order():
             "razorpay_order_id": order_id,
             "amount": amount_paise,
             "currency": "INR",
-            "key_id": RAZORPAY_KEY_ID
+            "key_id": _get_razorpay_credentials()[0]
         })
     finally:
         conn.close()
@@ -711,6 +800,17 @@ def payment_subscription_verify():
         updated_user = activate_freelancer_premium_subscription(freelancer_id, days=90)
         if not updated_user:
             return jsonify({"success": False, "msg": "Payment verified but subscription activation failed"}), 500
+
+        try:
+            _send_subscription_activation_email(
+                updated_user=updated_user,
+                plan_name="PREMIUM",
+                amount=PREMIUM_SUBSCRIPTION_AMOUNT_RUPEES,
+                validity=_format_subscription_validity(updated_user.get("premium_valid_until")),
+            )
+        except Exception:
+            # Email failures should never block a confirmed subscription activation.
+            pass
 
         return jsonify({
             "success": True,

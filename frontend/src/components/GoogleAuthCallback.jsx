@@ -7,6 +7,7 @@ export default function GoogleAuthCallback() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [error, setError] = useState("");
+  const role = searchParams.get("role") || "client";
 
   useEffect(() => {
     const errorMsg = searchParams.get("error");
@@ -46,6 +47,7 @@ export default function GoogleAuthCallback() {
     }
 
     login(loginData);
+    localStorage.setItem(`gb_has_account_${role}`, "1");
     console.log("User role:", role);
     if (role === "freelancer") {
       if (profileCompleted) {
@@ -66,7 +68,7 @@ export default function GoogleAuthCallback() {
           <h2 style={{ marginBottom: "0.5rem" }}>Login Failed</h2>
           <p style={{ color: "#666", marginBottom: "1.5rem" }}>{error}</p>
           <button
-            onClick={() => navigate("/login/client")}
+            onClick={() => navigate(`/login/${role}`)}
             style={{
               padding: "0.75rem 2rem",
               background: "#2563eb",

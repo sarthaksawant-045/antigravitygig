@@ -10,4 +10,5 @@ sentence-transformers
 google-generativeai
 psycopg2-binary
 flask-socketio
+gunicorn
 

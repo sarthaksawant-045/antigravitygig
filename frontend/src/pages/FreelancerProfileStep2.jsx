@@ -32,6 +32,8 @@ export default function FreelancerProfileStep2() {
     dob: "",
     phone: "",
   });
+  const [profileImage, setProfileImage] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState("");
 
   const [pricing, setPricing] = useState({
     type: "HOURLY",
@@ -64,6 +66,14 @@ export default function FreelancerProfileStep2() {
   }, []);
 
   const onField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0] || null;
+    setProfileImage(file);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setProfileImagePreview(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
   
   const onPricingField = (k) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -100,33 +110,36 @@ export default function FreelancerProfileStep2() {
     setSubmitting(true);
     setError("");
     try {
-      const payload = {
-        freelancer_id: user?.id,
-        title: form.title || `${basic.category || "Artist"} Performer`,
-        skills: form.skills || basic.category || "Artist",
-        experience_years: parseInt(basic.experience_years || "0", 10),
-        bio: form.bio || "",
-        category: basic.category || "",
-        location: basic.location || "",
-        dob: form.dob || "",
-        pincode: basic.pincode || "",
-        phone: form.phone || "",
-        
-        // Map pricing fields expected by robust backend endpoint
-        pricing_type: pricing.type,
-      };
+      const payload = new FormData();
+      payload.append("freelancer_id", user?.id);
+      payload.append("title", form.title || `${basic.category || "Artist"} Performer`);
+      payload.append("skills", form.skills || basic.category || "Artist");
+      payload.append("experience_years", parseInt(basic.experience_years || "0", 10));
+      payload.append("bio", form.bio || "");
+      payload.append("category", basic.category || "");
+      payload.append("location", basic.location || "");
+      payload.append("dob", form.dob || "");
+      payload.append("pincode", basic.pincode || "");
+      payload.append("phone", form.phone || "");
+      payload.append("pricing_type", pricing.type);
+
+      if (profileImage) {
+        payload.append("profile_image", profileImage);
+      }
 
       if (pricing.type === "HOURLY") {
-        payload.hourly_rate = parseFloat(pricing.hourlyRate);
-        payload.overtime_rate_per_hour = pricing.hasOvertime && pricing.overtimeRate ? parseFloat(pricing.overtimeRate) : null;
+        payload.append("hourly_rate", parseFloat(pricing.hourlyRate));
+        if (pricing.hasOvertime && pricing.overtimeRate) {
+          payload.append("overtime_rate_per_hour", parseFloat(pricing.overtimeRate));
+        }
       } else if (pricing.type === "PER_PERSON") {
-        payload.per_person_rate = parseFloat(pricing.perPersonRate);
+        payload.append("per_person_rate", parseFloat(pricing.perPersonRate));
       } else if (pricing.type === "PROJECT") {
-        payload.starting_price = parseFloat(pricing.projectPrice);
-        payload.work_description = pricing.description || "Project work";
-        payload.services_included = pricing.services || "";
+        payload.append("starting_price", parseFloat(pricing.projectPrice));
+        payload.append("work_description", pricing.description || "Project work");
+        payload.append("services_included", pricing.services || "");
       }
-      
+
       const res = await freelancerService.createProfile(payload);
       console.log("Profile response:", res);
       if (res && res.success) {
@@ -300,6 +313,36 @@ export default function FreelancerProfileStep2() {
             value={form.phone}
             onChange={onField("phone")}
           />
+        </label>
+
+        <label>
+          <span>Profile Image</span>
+          <div className="cp-upload-field">
+            <label className="cp-upload-box">
+              <input type="file" accept="image/*" onChange={handleImageUpload} />
+              <span className="cp-upload-button">Choose Image</span>
+              <span className="cp-upload-text">
+                {profileImage?.name || "Upload a profile photo"}
+              </span>
+            </label>
+            <div className="cp-upload-preview">
+              {profileImagePreview ? (
+                <img
+                  src={profileImagePreview}
+                  alt="Profile preview"
+                  className="cp-upload-avatar"
+                />
+              ) : (
+                <div className="cp-upload-avatar cp-upload-avatar-fallback" aria-hidden="true">
+                  {form.title?.trim()?.charAt(0)?.toUpperCase() || basic?.category?.trim()?.charAt(0)?.toUpperCase() || "A"}
+                </div>
+              )}
+              <div className="cp-upload-meta">
+                <span className="cp-upload-title">Optional profile image</span>
+                <span className="cp-upload-subtitle">PNG, JPG, WEBP or GIF</span>
+              </div>
+            </div>
+          </div>
         </label>
         
         {error && (

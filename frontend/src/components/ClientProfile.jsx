@@ -29,6 +29,7 @@ export default function ClientProfile() {
   const [saving, setSaving] = useState(false);
   const [savedToast, setSavedToast] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [profileImage, setProfileImage] = useState(null);
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("gb_user_data") || "{}");
@@ -60,6 +61,7 @@ export default function ClientProfile() {
   const onFile = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
+    setProfileImage(f);
     const reader = new FileReader();
     reader.onload = () => {
       setDraft((d) => ({ ...d, avatar: reader.result }));
@@ -71,20 +73,30 @@ export default function ClientProfile() {
     setSaving(true);
     const userData = JSON.parse(localStorage.getItem("gb_user_data") || "{}");
     const clientId = userData.id;
+    let nextDraft = draft;
     if (clientId) {
       try {
-        await clientService.createProfile({
-          client_id: clientId,
-          phone: draft.phone,
-          location: draft.location,
-          bio: draft.bio || "",
-          dob: draft.dob || "",
-          pincode: "",
-        });
+        const formData = new FormData();
+        formData.append("client_id", clientId);
+        formData.append("name", draft.name || "");
+        formData.append("phone", draft.phone);
+        formData.append("location", draft.location);
+        formData.append("bio", draft.bio || "");
+        formData.append("dob", draft.dob || "");
+        formData.append("pincode", "");
+        if (profileImage) {
+          formData.append("profile_image", profileImage);
+        }
+        const res = await clientService.createProfile(formData);
+        if (res?.profile_image) {
+          nextDraft = { ...draft, avatar: res.profile_image };
+          setDraft(nextDraft);
+        }
       } catch {}
     }
-    if (draft.avatar) localStorage.setItem("client_profile_avatar", draft.avatar);
-    setOriginal(draft);
+    if (nextDraft.avatar) localStorage.setItem("client_profile_avatar", nextDraft.avatar);
+    setOriginal(nextDraft);
+    setProfileImage(null);
     setSaving(false);
     setSavedToast(true);
     setTimeout(() => setSavedToast(false), 1100);
@@ -150,11 +162,17 @@ export default function ClientProfile() {
         <aside className="clientp-left fade-in">
           <div className="clientp-card">
             <div className="clientp-avatar-wrap">
-              <img
-                src={draft.avatar || "/assets/hero-image.png"}
-                alt={draft.name}
-                className="clientp-avatar"
-              />
+              {draft.avatar ? (
+                <img
+                  src={draft.avatar}
+                  alt={draft.name}
+                  className="clientp-avatar"
+                />
+              ) : (
+                <div className="clientp-avatar clientp-avatar-fallback">
+                  {(draft.name || "C").charAt(0).toUpperCase()}
+                </div>
+              )}
               <button className="clientp-avatar-edit" onClick={onPickAvatar} aria-label="Edit photo">
                 <Edit2 size={16} />
               </button>

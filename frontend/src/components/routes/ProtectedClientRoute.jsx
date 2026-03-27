@@ -23,9 +23,8 @@ export default function ProtectedClientRoute({ children, requireCompleted = true
     return <Navigate to="/onboarding" replace />;
   }
 
-  // Add top padding to prevent navbar overlap on client pages only
   return (
-    <div style={{ paddingTop: '70px' }}>
+    <div style={{ paddingTop: 0 }}>
       {children}
     </div>
   );

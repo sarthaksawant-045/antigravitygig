@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { getBrandLogoUrl } from '../utils/branding.js';
 import './subscription.css';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
 const SubscriptionPage = () => {
   const [activeSidebar, setActiveSidebar] = useState('subscription');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -132,7 +134,7 @@ const SubscriptionPage = () => {
     setPaymentError('');
 
     try {
-      const orderResponse = await fetch('/api/payments/create-order', {
+      const orderResponse = await fetch(`${API_BASE_URL}/api/payments/create-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +169,7 @@ const SubscriptionPage = () => {
         },
         handler: async (response) => {
           try {
-            const verifyResponse = await fetch('/api/payments/verify', {
+            const verifyResponse = await fetch(`${API_BASE_URL}/api/payments/verify`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

@@ -2,7 +2,7 @@ import psycopg2
 import psycopg2.errors
 from datetime import datetime
 from html import escape
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory, redirect
 from database import client_db, freelancer_db, mark_job_completed
 from psycopg2.extras import RealDictCursor
 from postgres_config import get_postgres_connection, get_dict_cursor
@@ -464,6 +464,30 @@ def _google_state_cleanup():
             expired.append(k)
     for k in expired:
         GOOGLE_OAUTH_STATES.pop(k, None)
+
+
+def _google_frontend_callback_url(params):
+    base = (FRONTEND_BASE_URL or "http://localhost:5173").rstrip("/")
+    query = urllib.parse.urlencode(params)
+    return f"{base}/auth/callback?{query}"
+
+
+def _get_google_profile_completed(role, user_id):
+    conn = None
+    try:
+        conn = client_db() if role == "client" else freelancer_db()
+        cur = get_dict_cursor(conn)
+        if role == "client":
+            cur.execute("SELECT 1 FROM client_profile WHERE client_id=%s", (user_id,))
+        else:
+            cur.execute("SELECT 1 FROM freelancer_profile WHERE freelancer_id=%s", (user_id,))
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.warning(f"Failed to check Google profile completion for {role} {user_id}: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
 
 def fuzzy_score(query: str, text: str) -> int:
     # token_set_ratio is very good for search-like matching
@@ -1096,7 +1120,7 @@ def build_branded_email_html(subject, body):
     </html>
     """
 
-def send_email(to_email, subject, body, related_project_id=None):
+def send_email(to_email, subject, body, related_project_id=None, html_body=None):
     if not SENDER_EMAIL or not APP_PASSWORD:
         print("❌ Email credentials missing. Logging to DB as Failed.")
         log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg="Credentials missing")
@@ -1107,7 +1131,7 @@ def send_email(to_email, subject, body, related_project_id=None):
     msg["To"] = to_email
     msg["Subject"] = subject
     msg.set_content(body)
-    msg.add_alternative(build_branded_email_html(subject, body), subtype="html")
+    msg.add_alternative(html_body or build_branded_email_html(subject, body), subtype="html")
 
     server = None
     try:
@@ -1738,7 +1762,7 @@ def freelancer_signup():
 @app.route("/client/profile", methods=["POST"])
 def create_client_profile():
     """Create or update client profile"""
-    d = get_json()
+    d = get_request_data()
     missing = require_fields(d, ["client_id"])
     if missing:
         return jsonify({"success": False, "msg": "Missing fields: client_id required"}), 400
@@ -1754,6 +1778,7 @@ def create_client_profile():
     dob      = str(d.get("dob", "")).strip()
     pincode  = str(d.get("pincode", "")).strip()
     name     = str(d.get("name", "")).strip()
+    profile_image_file = request.files.get("profile_image")
 
     # Age validation if dob provided
     if dob:
@@ -1769,9 +1794,17 @@ def create_client_profile():
         cur = get_dict_cursor(conn)
 
         # Verify client exists
-        cur.execute("SELECT id FROM client WHERE id=%s", (client_id,))
-        if not cur.fetchone():
+        cur.execute("SELECT id, profile_image FROM client WHERE id=%s", (client_id,))
+        client_row = cur.fetchone()
+        if not client_row:
             return jsonify({"success": False, "msg": "Client not found"}), 404
+
+        profile_image_path = client_row.get("profile_image") if isinstance(client_row, dict) else None
+        if profile_image_file:
+          try:
+              profile_image_path = save_profile_image_upload(profile_image_file, "client", client_id)
+          except ValueError as err:
+              return jsonify({"success": False, "msg": str(err)}), 400
 
         # UPSERT profile
         cur.execute("""
@@ -1789,9 +1822,11 @@ def create_client_profile():
         # Optionally update name in main client table if provided
         if name:
             cur.execute("UPDATE client SET name=%s WHERE id=%s", (name, client_id))
+        if profile_image_path:
+            cur.execute("UPDATE client SET profile_image=%s WHERE id=%s", (profile_image_path, client_id))
 
         conn.commit()
-        return jsonify({"success": True, "msg": "Profile saved successfully"})
+        return jsonify({"success": True, "msg": "Profile saved successfully", "profile_image": profile_image_path})
 
     except Exception as e:
         if conn:
@@ -2086,7 +2121,7 @@ def client_profile():
 
 @app.route("/freelancer/profile", methods=["POST"])
 def freelancer_profile():
-    d = get_json()
+    d = get_request_data()
     print(f"DEBUG: Received payload: {d}")  # Debug line
     missing = require_fields(
         d,
@@ -2226,9 +2261,24 @@ def freelancer_profile():
         lat, lon = geocode_address(str(loc_str))
 
     freelancer_id = int(d["freelancer_id"])
+    profile_image_file = request.files.get("profile_image")
 
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
+    cur.execute("SELECT id, profile_image FROM freelancer WHERE id=%s", (freelancer_id,))
+    freelancer_row = cur.fetchone()
+    if not freelancer_row:
+        conn.close()
+        return jsonify({"success": False, "msg": "Freelancer not found"}), 404
+
+    profile_image_path = freelancer_row.get("profile_image") if isinstance(freelancer_row, dict) else None
+    if profile_image_file:
+        try:
+            profile_image_path = save_profile_image_upload(profile_image_file, "freelancer", freelancer_id)
+        except ValueError as err:
+            conn.close()
+            return jsonify({"success": False, "msg": str(err)}), 400
+
     cur.execute(
         """
         INSERT INTO freelancer_profile
@@ -2292,6 +2342,8 @@ def freelancer_profile():
             d.get("phone"),
         ),
     )
+    if profile_image_path:
+        cur.execute("UPDATE freelancer SET profile_image=%s WHERE id=%s", (profile_image_path, freelancer_id))
     conn.commit()
     conn.close()
 
@@ -2320,7 +2372,7 @@ def freelancer_profile():
     except Exception:
         pass
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "profile_image": profile_image_path})
 
 @app.route("/freelancer/update-availability", methods=["POST"])
 def update_freelancer_availability():
@@ -5204,6 +5256,7 @@ def freelancer_notifications():
 # - DOES NOT TOUCH EXISTING LOGIN/SIGNUP/OTP
 # ============================================================
 
+@app.route("/auth/google", methods=["GET"])
 @app.route("/auth/google/start", methods=["GET"])
 def google_oauth_start():
     _google_state_cleanup()
@@ -5249,11 +5302,15 @@ def google_oauth_callback():
     state = request.args.get("state")
 
     if not code or not state:
-        return "Missing code/state", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Missing code or state from Google."
+        }))
 
     st = GOOGLE_OAUTH_STATES.get(state)
     if not st:
-        return "Invalid or expired state. Please try again.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google login session expired. Please try again."
+        }))
 
     role = st["role"]
 
@@ -5273,14 +5330,18 @@ def google_oauth_callback():
     if token_res.status_code != 200:
         st["done"] = True
         st["result"] = {"success": False, "msg": "Token exchange failed"}
-        return "Google token exchange failed. You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google token exchange failed. Please try again."
+        }))
 
     token_data = token_res.json()
     id_token = token_data.get("id_token")
     if not id_token:
         st["done"] = True
         st["result"] = {"success": False, "msg": "No id_token returned"}
-        return "Google did not return an ID token. You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google did not return an ID token."
+        }))
 
     # 2) Verify ID token using Google's tokeninfo endpoint (no extra libs needed)
     info_res = requests.get(
@@ -5292,7 +5353,9 @@ def google_oauth_callback():
     if info_res.status_code != 200:
         st["done"] = True
         st["result"] = {"success": False, "msg": "Token verification failed"}
-        return "Google token verification failed. You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google token verification failed."
+        }))
 
     info = info_res.json()
 
@@ -5306,18 +5369,24 @@ def google_oauth_callback():
     if aud != GOOGLE_CLIENT_ID:
         st["done"] = True
         st["result"] = {"success": False, "msg": "Invalid token audience"}
-        return "Invalid Google token (audience). You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Invalid Google token audience."
+        }))
 
     if not email or not sub:
         st["done"] = True
         st["result"] = {"success": False, "msg": "Email not available"}
-        return "Google email not available. You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google account email is not available."
+        }))
 
     # optional strict check
     if email_verified and email_verified not in ("true", "1", "yes"):
         st["done"] = True
         st["result"] = {"success": False, "msg": "Email not verified"}
-        return "Google email not verified. You can close this tab.", 400
+        return redirect(_google_frontend_callback_url({
+            "error": "Google email is not verified."
+        }))
 
     # 3) Upsert user into correct DB based on role
     if role == "client":
@@ -5329,23 +5398,33 @@ def google_oauth_callback():
 
         if row:
             client_id = row.get("id")
-            pwd = row.get("password")
-            provider = row.get("auth_provider") or "local"
             gsub = row.get("google_sub")
-            if not provider:
-                provider = "local"
             if not gsub:
                 cur.execute("UPDATE client SET google_sub=%s WHERE id=%s", (sub, client_id))
             conn.commit()
             conn.close()
 
+            profile_done = _get_google_profile_completed("client", client_id)
             st["done"] = True
-            st["result"] = {"success": True, "role": "client", "client_id": client_id, "email": email}
+            st["result"] = {
+                "success": True,
+                "role": "client",
+                "client_id": client_id,
+                "email": email,
+                "name": name,
+                "picture": info.get("picture", ""),
+                "profile_completed": profile_done,
+            }
 
-            return f"""
-            <h3>✅ Google Login Success (Client)</h3>
-            <p>You can close this tab and return to the app.</p>
-            """
+            return redirect(_google_frontend_callback_url({
+                "success": "1",
+                "role": "client",
+                "id": client_id,
+                "email": email,
+                "name": name,
+                "picture": info.get("picture", ""),
+                "profile_completed": "1" if profile_done else "0",
+            }))
 
         if not name:
             name = email.split("@")[0]
@@ -5363,13 +5442,27 @@ def google_oauth_callback():
         conn.commit()
         conn.close()
 
+        profile_done = _get_google_profile_completed("client", client_id)
         st["done"] = True
-        st["result"] = {"success": True, "role": "client", "client_id": client_id, "email": email}
+        st["result"] = {
+            "success": True,
+            "role": "client",
+            "client_id": client_id,
+            "email": email,
+            "name": name,
+            "picture": info.get("picture", ""),
+            "profile_completed": profile_done,
+        }
 
-        return f"""
-        <h3>✅ Google Signup/Login Success (Client)</h3>
-        <p>You can close this tab and return to the app.</p>
-        """
+        return redirect(_google_frontend_callback_url({
+            "success": "1",
+            "role": "client",
+            "id": client_id,
+            "email": email,
+            "name": name,
+            "picture": info.get("picture", ""),
+            "profile_completed": "1" if profile_done else "0",
+        }))
 
     else:
         conn = freelancer_db()
@@ -5380,23 +5473,33 @@ def google_oauth_callback():
 
         if row:
             freelancer_id = row.get("id")
-            pwd = row.get("password")
-            provider = row.get("auth_provider") or "local"
             gsub = row.get("google_sub")
-            if not provider:
-                provider = "local"
             if not gsub:
                 cur.execute("UPDATE freelancer SET google_sub=%s WHERE id=%s", (sub, freelancer_id))
             conn.commit()
             conn.close()
 
+            profile_done = _get_google_profile_completed("freelancer", freelancer_id)
             st["done"] = True
-            st["result"] = {"success": True, "role": "freelancer", "freelancer_id": freelancer_id, "email": email}
+            st["result"] = {
+                "success": True,
+                "role": "freelancer",
+                "freelancer_id": freelancer_id,
+                "email": email,
+                "name": name,
+                "picture": info.get("picture", ""),
+                "profile_completed": profile_done,
+            }
 
-            return f"""
-            <h3>✅ Google Login Success (Freelancer)</h3>
-            <p>You can close this tab and return to the app.</p>
-            """
+            return redirect(_google_frontend_callback_url({
+                "success": "1",
+                "role": "freelancer",
+                "id": freelancer_id,
+                "email": email,
+                "name": name,
+                "picture": info.get("picture", ""),
+                "profile_completed": "1" if profile_done else "0",
+            }))
 
         if not name:
             name = email.split("@")[0]
@@ -5414,13 +5517,27 @@ def google_oauth_callback():
         conn.commit()
         conn.close()
 
+        profile_done = _get_google_profile_completed("freelancer", freelancer_id)
         st["done"] = True
-        st["result"] = {"success": True, "role": "freelancer", "freelancer_id": freelancer_id, "email": email}
+        st["result"] = {
+            "success": True,
+            "role": "freelancer",
+            "freelancer_id": freelancer_id,
+            "email": email,
+            "name": name,
+            "picture": info.get("picture", ""),
+            "profile_completed": profile_done,
+        }
 
-        return f"""
-        <h3>✅ Google Signup/Login Success (Freelancer)</h3>
-        <p>You can close this tab and return to the app.</p>
-        """
+        return redirect(_google_frontend_callback_url({
+            "success": "1",
+            "role": "freelancer",
+            "id": freelancer_id,
+            "email": email,
+            "name": name,
+            "picture": info.get("picture", ""),
+            "profile_completed": "1" if profile_done else "0",
+        }))
 
 
 @app.route("/auth/google/status", methods=["GET"])
@@ -5448,6 +5565,38 @@ def google_oauth_status():
 UPLOADS_FOLDER = "uploads"
 if not os.path.exists(UPLOADS_FOLDER):
     os.makedirs(UPLOADS_FOLDER)
+PROFILE_IMAGES_FOLDER = os.path.join(UPLOADS_FOLDER, "profile_images")
+os.makedirs(PROFILE_IMAGES_FOLDER, exist_ok=True)
+
+ALLOWED_PROFILE_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
+
+def get_request_data():
+    if request.content_type and "multipart/form-data" in request.content_type:
+        return request.form.to_dict()
+    return get_json()
+
+
+def save_profile_image_upload(file_storage, user_type, user_id):
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        return None
+
+    original_name = secure_filename(file_storage.filename)
+    _, ext = os.path.splitext(original_name)
+    ext = ext.lower()
+    if ext not in ALLOWED_PROFILE_IMAGE_EXTENSIONS:
+        raise ValueError("Invalid profile image format")
+
+    filename = secure_filename(f"{user_type}_{user_id}_{int(time.time())}{ext}")
+    absolute_path = os.path.join(PROFILE_IMAGES_FOLDER, filename)
+    file_storage.save(absolute_path)
+    relative_path = f"/uploads/profile_images/{filename}"
+    return urllib.parse.urljoin(request.host_url, relative_path.lstrip("/"))
+
+
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def serve_upload(filename):
+    return send_from_directory(UPLOADS_FOLDER, filename)
 
 def copy_image_to_uploads(image_path):
     """Copy image to uploads folder and return relative path"""
@@ -8071,21 +8220,26 @@ def _get_freelancer_category(cur, freelancer_id):
         }
         return aliases.get(text, text)
 
-    # The freelancer's working category is primarily stored in freelancer_profile.
-    cur.execute("""
-        SELECT fp.category AS profile_category, f.category AS account_category
-        FROM freelancer f
-        LEFT JOIN freelancer_profile fp ON fp.freelancer_id = f.id
-        WHERE f.id = %s
-    """, (freelancer_id,))
-    row = cur.fetchone()
+    # Freelancer identity/category lives in the freelancer database, not the client database.
+    # Some callers pass a client_db cursor for project queries, so do this lookup separately.
+    lookup_conn = freelancer_db()
+    lookup_cur = get_dict_cursor(lookup_conn)
+    try:
+        lookup_cur.execute("""
+            SELECT fp.category AS profile_category
+            FROM freelancer f
+            LEFT JOIN freelancer_profile fp ON fp.freelancer_id = f.id
+            WHERE f.id = %s
+        """, (freelancer_id,))
+        row = lookup_cur.fetchone()
+    finally:
+        lookup_conn.close()
+
     if not row:
         return None
 
     profile_category = row.get("profile_category") if isinstance(row, dict) else row[0]
-    account_category = row.get("account_category") if isinstance(row, dict) else row[1]
-
-    category = (profile_category or account_category or "").strip()
+    category = (profile_category or "").strip()
     normalized_category = _normalize_category_key(category)
     return normalized_category or None
 
@@ -8968,7 +9122,9 @@ if __name__ == "__main__":
         logger.error("Please ensure PostgreSQL is running and configured correctly")
         logger.error("Server will start but database operations may fail")
     
-    logger.info("Starting Flask server on http://0.0.0.0:5000")
+    port = int(os.environ.get("PORT", 5000))
+    debug_mode = os.environ.get("ENV") != "production"
+    logger.info(f"Starting Flask server on http://0.0.0.0:{port}")
     
     # Start background scheduler
     import threading
@@ -8979,15 +9135,12 @@ if __name__ == "__main__":
         logger.info("Starting server with Socket.IO support")
         try:
             SOCKET_IO_REALLY_WORKING = True
-            socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+            socketio.run(app, host='0.0.0.0', port=port, debug=debug_mode, allow_unsafe_werkzeug=True)
         except Exception as e:
             SOCKET_IO_REALLY_WORKING = False
             logger.error(f"Socket.IO server failed: {e}")
             logger.info("Falling back to regular Flask server")
-        if SOCKET_IO_ENABLED:
-            socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
-        else:
-            app.run(host='0.0.0.0', port=5000, debug=True)
+            app.run(host='0.0.0.0', port=port, debug=debug_mode)
     else:
         logger.info("Starting server without Socket.IO support")
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        app.run(host='0.0.0.0', port=port, debug=debug_mode)

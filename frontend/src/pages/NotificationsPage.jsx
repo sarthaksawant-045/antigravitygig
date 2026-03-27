@@ -33,21 +33,25 @@ export default function NotificationsPage() {
     if (!user?.id) return;
 
     setLoading(true);
-    
-    // Parallel fetch for better performance
-    Promise.all([
+
+    Promise.allSettled([
       getNotifications(user.id),
       getUnreadCount(user.id)
     ])
-    .then(([notifRes, countRes]) => {
-      setNotifications(notifRes.notifications || []);
-      setUnreadCount(countRes.unread_count || 0);
-    })
-    .catch(() => {
-      setNotifications([]);
-      setUnreadCount(0);
-    })
-    .finally(() => setLoading(false));
+      .then(([notifResult, countResult]) => {
+        const notifRes =
+          notifResult.status === 'fulfilled' ? (notifResult.value || {}) : { notifications: [] };
+        const countRes =
+          countResult.status === 'fulfilled' ? (countResult.value || {}) : { unread_count: 0 };
+
+        setNotifications(notifRes.notifications || []);
+        setUnreadCount(countRes.unread_count || 0);
+      })
+      .catch(() => {
+        setNotifications([]);
+        setUnreadCount(0);
+      })
+      .finally(() => setLoading(false));
   }, [user?.id]);
 
   useEffect(() => {
@@ -65,10 +69,12 @@ export default function NotificationsPage() {
 
     connectPromise.finally(() => {
       socketService.on('new_notification', handleNotificationCreated);
+      socketService.on('notificationCreated', handleNotificationCreated);
     });
 
     return () => {
       socketService.off('new_notification', handleNotificationCreated);
+      socketService.off('notificationCreated', handleNotificationCreated);
     };
   }, [user?.id, user?.role]);
 

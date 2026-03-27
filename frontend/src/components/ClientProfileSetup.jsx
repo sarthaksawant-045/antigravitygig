@@ -12,6 +12,8 @@ export default function ClientProfileSetup() {
   const [showToast, setShowToast] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [ripple, setRipple] = useState({ x: 0, y: 0, t: 0 });
+  const [profileImage, setProfileImage] = useState(null);
+  const [profileImagePreview, setProfileImagePreview] = useState("");
   const [form, setForm] = useState({
     username: "",
     location: "",
@@ -36,6 +38,7 @@ export default function ClientProfileSetup() {
             bio: data.bio || f.bio,
             dob: data.dob || f.dob,
           }));
+          setProfileImagePreview(data.profile_image || "");
           return;
         }
         loadDraft();
@@ -66,6 +69,14 @@ export default function ClientProfileSetup() {
   const pct = useMemo(() => (step === 1 ? 50 : 100), [step]);
 
   const onField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const handleImageUpload = (e) => {
+    const file = e.target.files?.[0] || null;
+    setProfileImage(file);
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setProfileImagePreview(String(reader.result || ""));
+    reader.readAsDataURL(file);
+  };
 
   const continueToStep2 = (e) => {
     e.preventDefault();
@@ -96,14 +107,18 @@ export default function ClientProfileSetup() {
       return;
     }
     try {
-      const res = await clientService.createProfile({
-        client_id: clientId,
-        phone: form.phone,
-        location: form.location,
-        bio: form.bio || "",
-        dob: form.dob || "",
-        pincode: form.pin || "",
-      });
+      const formData = new FormData();
+      formData.append("client_id", clientId);
+      formData.append("phone", form.phone);
+      formData.append("location", form.location);
+      formData.append("bio", form.bio || "");
+      formData.append("dob", form.dob || "");
+      formData.append("pincode", form.pin || "");
+      formData.append("name", form.username || "");
+      if (profileImage) {
+        formData.append("profile_image", profileImage);
+      }
+      const res = await clientService.createProfile(formData);
       if (!res.success) {
         setSaveError(res.msg || "Failed to save profile. Please try again.");
         return;
@@ -205,6 +220,35 @@ export default function ClientProfileSetup() {
                 onChange={onField("phone")}
                 required
               />
+            </label>
+            <label>
+              <span>Profile Image</span>
+              <div className="cp-upload-field">
+                <label className="cp-upload-box">
+                  <input type="file" accept="image/*" onChange={handleImageUpload} />
+                  <span className="cp-upload-button">Choose Image</span>
+                  <span className="cp-upload-text">
+                    {profileImage?.name || "Upload a profile photo"}
+                  </span>
+                </label>
+                <div className="cp-upload-preview">
+                  {profileImagePreview ? (
+                    <img
+                      src={profileImagePreview}
+                      alt="Profile preview"
+                      className="cp-upload-avatar"
+                    />
+                  ) : (
+                    <div className="cp-upload-avatar cp-upload-avatar-fallback" aria-hidden="true">
+                      {form.username?.trim()?.charAt(0)?.toUpperCase() || "U"}
+                    </div>
+                  )}
+                  <div className="cp-upload-meta">
+                    <span className="cp-upload-title">Optional profile image</span>
+                    <span className="cp-upload-subtitle">PNG, JPG, WEBP or GIF</span>
+                  </div>
+                </div>
+              </div>
             </label>
             <label>
               <span>Bio</span>

@@ -5,6 +5,7 @@ const CATEGORIES = ["Dance", "Photography", "Designer", "Musician", "Artist", "E
 export default function EditProfileModal({ profile, onClose, onSave }) {
   const [formData, setFormData] = useState({ ...profile });
   const [imagePreview, setImagePreview] = useState(profile.profileImage);
+  const [profileImage, setProfileImage] = useState(null);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -17,6 +18,7 @@ export default function EditProfileModal({ profile, onClose, onSave }) {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
+      setProfileImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
@@ -28,7 +30,7 @@ export default function EditProfileModal({ profile, onClose, onSave }) {
 
   const handleSave = (e) => {
     e.preventDefault();
-    onSave(formData);
+    onSave({ ...formData, profileImageFile: profileImage });
   };
 
   return (

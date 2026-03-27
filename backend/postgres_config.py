@@ -19,7 +19,7 @@ def get_postgres_config():
     """Get PostgreSQL configuration from environment variables"""
     database_url = os.getenv("DATABASE_URL")
     if database_url:
-        # Cloud Postgres (Neon) DSN-style connection with SSL enforced.
+        # Production/hosted PostgreSQL via DATABASE_URL with SSL enforced.
         return {
             "dsn": database_url,
             "sslmode": "require",
@@ -31,7 +31,7 @@ def get_postgres_config():
         'port': int(os.getenv('POSTGRES_PORT', '5432')),
         'database': os.getenv('POSTGRES_DB', 'gigbridge'),
         'user': os.getenv('POSTGRES_USER', 'postgres'),
-        'password': os.getenv('POSTGRES_PASSWORD', 'Sarthak123'),
+        'password': os.getenv('POSTGRES_PASSWORD', 'sarthak123'),
         'options': '-c client_encoding=UTF8',
     }
 
@@ -99,6 +99,23 @@ def test_database_connection():
 def ensure_database_exists():
     """Ensure the database exists, create if necessary"""
     config = get_postgres_config()
+
+    # Hosted providers like Render already provision the database referenced
+    # by DATABASE_URL, so there is nothing to create here.
+    if "dsn" in config:
+        try:
+            conn = psycopg2.connect(
+                config["dsn"],
+                sslmode=config.get("sslmode", "require"),
+                options=config.get("options", "-c client_encoding=UTF8"),
+            )
+            conn.close()
+            logger.info("DATABASE_URL connection verified successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to verify DATABASE_URL connection: {e}")
+            return False
+
     db_name = config['database']
     
     try:

@@ -34,7 +34,7 @@ const CATEGORY_FIELDS = {
 export default function CategoryDynamicSection({ profile }) {
   const categoryData = CATEGORY_FIELDS[profile.category] || { 
     title: "Professional Details", 
-    fields: [{ label: "Experience", key: "experience", value: `${profile.experience} years` }] 
+    fields: [] 
   };
 
   return (
