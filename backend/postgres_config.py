@@ -204,4 +204,4 @@ def verify_live_database_connection():
 
 
 # Verify DB connectivity once when module is loaded during server startup.
-verify_live_database_connection()
+# verify_live_database_connection() # Moved to app start block

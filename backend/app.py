@@ -358,8 +358,9 @@ def handle_exception(error):
         "msg": "Server error occurred"
     }), 500
 
-create_tables()
-ensure_admin_tables()
+# Table creation moved to main block to prevent startup hangs
+# create_tables()
+# ensure_admin_tables()
 
 # ============================================================
 # STARTUP VALIDATION
@@ -398,8 +399,8 @@ def validate_startup():
         import logging
         logging.getLogger(__name__).error(f"Startup validation failed: {str(e)}", exc_info=True)
 
-# Run startup validation
-validate_startup()
+# Startup validation moved to main block
+# validate_startup()
 
 from security import security_middleware, security_request_logging
 from admin_routes import admin_bp # Assuming admin_routes is imported here or earlier
@@ -423,11 +424,14 @@ app.register_blueprint(ticket_bp)
 
 
 # Try to load semantic index (optional; app still works without it)
-try:
-    load_or_build()
-except Exception as _e:
-    import logging
-    logging.getLogger(__name__).warning(f"Semantic index not loaded: {_e}")
+def init_semantic_search():
+    try:
+        load_or_build()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning(f"Semantic index not loaded: {_e}")
+
+# init_semantic_search() # Called later in main thread or main block
 
 # ============================================================
 # AGENT: PENDING ACTION MEMORY
@@ -9101,22 +9105,28 @@ if __name__ == "__main__":
     try:
         from postgres_config import test_database_connection, ensure_database_exists
         
-        # Ensure database exists
+        # 1. Ensure database exists
         if ensure_database_exists():
             logger.info("Database validation passed")
-            # Create core tables
+            # 2. Create core tables
             try:
                 create_tables()
                 logger.info("Core database tables initialized")
             except Exception as e:
                 logger.error(f"Core table creation failed: {e}")
 
-            # Create admin tables
+            # 3. Create admin tables
             try:
                 ensure_admin_tables()
                 logger.info("Admin database tables initialized")
             except Exception as e:
                 logger.error(f"Admin table creation failed: {e}")
+            
+            # 4. Run detailed validation
+            validate_startup()
+            
+            # 5. Load semantic index (can be slow, but better here than at module level)
+            init_semantic_search()
         else:
             logger.error("Failed to ensure database exists")
             
@@ -9129,7 +9139,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         logger.error("Please ensure PostgreSQL is running and configured correctly")
-        logger.error("Server will start but database operations may fail")
     
     port = int(os.environ.get("PORT", 5000))
     debug_mode = os.environ.get("ENV") != "production"

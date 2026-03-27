@@ -1,16 +1,19 @@
 import os
 import json
 try:
-    import google.generativeai as genai
+    from google import genai
 except ImportError:
     genai = None
 
-# Configure Gemini if available
+# Configure Gemini Client if available
 if genai:
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        client = genai.Client(api_key=api_key)
+    else:
+        client = None
 else:
-    model = None
+    client = None
 
 SYSTEM_PROMPT = """
 You are a query parser for a freelancer marketplace.
@@ -50,9 +53,9 @@ def parse_query(user_query: str) -> dict:
               Returns empty dict if parsing fails
     """
     try:
-        # Check if model is available
-        if not model:
-            print("Gemini model not available")
+        # Check if client is available
+        if not client:
+            print("Gemini client not available")
             return {}
             
         # Check if API key is available
@@ -62,8 +65,9 @@ def parse_query(user_query: str) -> dict:
             return {}
         
         # Generate response
-        response = model.generate_content(
-            SYSTEM_PROMPT + "\n\nUser query:\n'" + user_query + "'\n\nOutput:"
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=SYSTEM_PROMPT + "\n\nUser query:\n'" + user_query + "'\n\nOutput:"
         )
         
         # Extract and parse JSON response
