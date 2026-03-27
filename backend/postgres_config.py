@@ -48,12 +48,10 @@ def get_postgres_connection():
     
     try:
         if "dsn" in config:
-            logger.info("Connecting to PostgreSQL via DATABASE_URL (SSL enabled)")
-            conn = psycopg2.connect(
-                config["dsn"],
-                sslmode=config.get("sslmode", "require"),
-                options=config.get("options", "-c client_encoding=UTF8"),
-            )
+            logger.info("Connecting to PostgreSQL via DATABASE_URL")
+            # If DSN is provided, we use it directly. 
+            # sslmode and other options are often already in the DSN.
+            conn = psycopg2.connect(config["dsn"])
         else:
             logger.info(f"Connecting to PostgreSQL: {config['host']}:{config['port']}/{config['database']}")
             conn = psycopg2.connect(**config)

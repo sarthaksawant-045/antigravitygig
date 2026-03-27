@@ -1,5 +1,10 @@
 import psycopg2
 import psycopg2.errors
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env file
+load_dotenv()
 from datetime import datetime
 from html import escape
 from flask import Flask, request, jsonify, send_from_directory, redirect
@@ -9132,8 +9137,8 @@ if __name__ == "__main__":
             # 4. Run detailed validation
             validate_startup()
             
-            # 5. Load semantic index (can be slow, but better here than at module level)
-            init_semantic_search()
+            # 5. Load semantic index (can be slow, so moved to background thread)
+            # init_semantic_search()
         else:
             logger.error("Failed to ensure database exists")
             
@@ -9154,6 +9159,9 @@ if __name__ == "__main__":
     # Start background scheduler
     import threading
     threading.Thread(target=run_scheduler, daemon=True).start()
+    
+    # Start semantic search initialization in background
+    threading.Thread(target=init_semantic_search, daemon=True).start()
 
     # Start with Socket.IO if available
     if SOCKET_IO_ENABLED and socketio is not None:

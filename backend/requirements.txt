@@ -13,4 +13,5 @@ flask-socketio
 gunicorn
 flask-limiter
 flask-jwt-extended
+python-dotenv
 marshmallow

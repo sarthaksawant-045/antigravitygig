@@ -1,7 +1,7 @@
 # semantic_search.py
 import os
 import json
-import sqlite3
+from postgres_config import freelancer_db, get_dict_cursor
 import numpy as np
 
 # Lazy loading to prevent slow startup
@@ -106,8 +106,8 @@ def load_or_build():
         return _index
 
     # build new
-    conn = sqlite3.connect("freelancer.db")
-    cur = conn.cursor()
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
     cur.execute("""
         SELECT freelancer_id,
                COALESCE(title,''),
@@ -154,8 +154,8 @@ def upsert_freelancer(freelancer_id: int):
     fid = int(freelancer_id)
 
     # pull fresh profile text
-    conn = sqlite3.connect("freelancer.db")
-    cur = conn.cursor()
+    conn = freelancer_db()
+    cur = get_dict_cursor(conn)
     cur.execute("""
         SELECT freelancer_id,
                COALESCE(title,''),
@@ -164,7 +164,7 @@ def upsert_freelancer(freelancer_id: int):
                COALESCE(tags,''),
                COALESCE(category,'')
         FROM freelancer_profile
-        WHERE freelancer_id=?
+        WHERE freelancer_id=%s
     """, (fid,))
     row = cur.fetchone()
     conn.close()
