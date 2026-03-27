@@ -134,11 +134,11 @@ def load_or_build():
     vecs = _embed_texts(texts)
     dim = vecs.shape[1]
 
-    base = faiss.IndexFlatIP(dim)
-    _index = faiss.IndexIDMap2(base)
+    base = f.IndexFlatIP(dim)
+    _index = f.IndexIDMap2(base)
     _index.add_with_ids(vecs, ids)
 
-    faiss.write_index(_index, INDEX_PATH)
+    f.write_index(_index, INDEX_PATH)
     return _index
 
 
@@ -173,15 +173,16 @@ def upsert_freelancer(freelancer_id: int):
     remove_ids = np.array([fid], dtype="int64")
     _index.remove_ids(remove_ids)
 
+    f = _get_faiss()
     if not row:
-        faiss.write_index(_index, INDEX_PATH)
+        f.write_index(_index, INDEX_PATH)
         return
 
     _, text = _make_text_row(row)
     vec = _embed_texts([text])
 
     _index.add_with_ids(vec, np.array([fid], dtype="int64"))
-    faiss.write_index(_index, INDEX_PATH)
+    f.write_index(_index, INDEX_PATH)
 
 
 def semantic_search(query: str, top_k: int = 20):
