@@ -1,1 +1,501 @@
-2026-03-27 07:56:02,214 - __main__ - INFO - [SOCKET] Socket.IO initialized with Flask app
+2026-03-27 11:54:32,533 - __main__ - INFO - [SOCKET] Socket.IO initialized with Flask app
+2026-03-27 11:54:34,303 - __main__ - INFO - Starting GigBridge backend server...
+2026-03-27 11:54:34,304 - __main__ - INFO - Testing database connection...
+2026-03-27 11:54:34,584 - __main__ - INFO - Database validation passed
+2026-03-27 11:54:34,886 - __main__ - INFO - Core database tables initialized
+2026-03-27 11:54:35,700 - __main__ - INFO - Admin database tables initialized
+2026-03-27 11:54:36,562 - __main__ - INFO - Database connection test passed
+2026-03-27 11:54:36,563 - __main__ - INFO - Starting Flask server on http://0.0.0.0:5000
+2026-03-27 11:54:36,570 - __main__ - INFO - Starting server with Socket.IO support
+2026-03-27 11:54:36,775 - werkzeug - WARNING -  * Debugger is active!
+2026-03-27 11:54:36,821 - werkzeug - INFO -  * Debugger PIN: 427-021-405
+2026-03-27 11:54:36,918 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:36,921 - __main__ - INFO - GET /client/projects
+2026-03-27 11:54:36,927 - __main__ - INFO - Payload: None
+2026-03-27 11:54:36,935 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:36,938 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:36,967 - __main__ - INFO - OPTIONS /projects/list
+2026-03-27 11:54:36,973 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:36,980 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:36,989 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:37,002 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:37,005 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:37,015 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:37,016 - __main__ - INFO - OPTIONS /client/hire/requests
+2026-03-27 11:54:37,028 - __main__ - INFO - OPTIONS /client/hire/requests
+2026-03-27 11:54:37,029 - __main__ - INFO - Payload: None
+2026-03-27 11:54:37,052 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:37,056 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,057 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:37,066 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:37,068 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:37,081 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,082 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,085 - __main__ - INFO - Payload: None
+2026-03-27 11:54:37,094 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,104 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,119 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,119 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:37,131 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,134 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,137 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "OPTIONS /projects/list?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:37,172 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,179 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,181 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "OPTIONS /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:37,187 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,204 - __main__ - INFO - Response: {'projects': [{'category': 'Singer', 'client_id': 15, 'created_at': 1774558600, 'description': 'stsftttttttttttttttttttttttttttttttttttttt', 'id': 69, 'location': 'mumbai', 'pricing_type': 'hourly', 'status': 'active', 'title': 'i want sin'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774518516, 'description': 'fffffffffffffffffffffffffffffffffffffffffffffffffffff', 'id': 68, 'location': 'mumbai', 'pricing_type': 'project', 'status': 'ASSIGNED', 'title': 'wedding'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774510939, 'description': 'khhddddddddddddddddddddddddddddddddddddddd', 'id': 67, 'location': 'mumbai', 'pricing_type': None, 'status': 'active', 'title': 'weeding'}, {'category': 'Mehendi Artist', 'client_id': 15, 'created_at': 1774506649, 'description': 'hsbbduhuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu', 'id': 66, 'location': 'mumbai', 'pricing_type': None, 'status': 'ASSIGNED', 'title': 'mehndi'}, {'category': 'DJ', 'client_id': 15, 'created_at':  ... [TRUNCATED]
+2026-03-27 11:54:37,214 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "OPTIONS /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:37,223 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,275 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "GET /client/projects?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:37,376 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,381 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,385 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:37,389 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,401 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:37,469 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:37,479 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:37,489 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:37,495 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:37,499 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:37] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:37,563 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:37,572 - __main__ - INFO - GET /client/hire/requests
+2026-03-27 11:54:37,584 - __main__ - INFO - Payload: None
+2026-03-27 11:54:37,597 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:38,130 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:38,152 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:38,187 - __main__ - INFO - Response: {'requests': [{'contract_type': 'PROJECT', 'created_at': 1774518689, 'event_status': 'completed', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Wedding Planner', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #13', 'payment_status': 'paid', 'payout_status': 'requested', 'proposed_budget': 3000.0, 'request_id': 32, 'status': 'COMPLETED'}, {'contract_type': 'PROJECT', 'created_at': 1774511109, 'event_status': 'scheduled', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Mehendi Artist', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #12', 'payment_status': 'pending', 'payout_status': 'on_hold', 'proposed_budget': 2000.0, 'request_id': 31, 'status': 'REJECTED'}, {'contract_type': 'FIXED', 'created_at': 1774412521, 'event_status': 's ... [TRUNCATED]
+2026-03-27 11:54:38,203 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:38,216 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:38] "GET /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:42,614 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:42,618 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:42,620 - __main__ - INFO - Payload: None
+2026-03-27 11:54:42,622 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:42,794 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:42,799 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:42,803 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:42,804 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:42,807 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:42] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:42,923 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:42,933 - __main__ - INFO - GET /conversation/15
+2026-03-27 11:54:42,939 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:43,221 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:43,235 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:43,237 - __main__ - INFO - Response: [{'conversation_id': 3, 'last_message': 'hi', 'other_user': {'id': 15, 'name': 's', 'profile_pic': None}, 'participants': [15, 15], 'updatedAt': 1774555909}, {'conversation_id': 2, 'last_message': 'hu', 'other_user': {'id': 17, 'name': 'vedika wagh', 'profile_pic': None}, 'participants': [15, 17], 'updatedAt': 1774527270}]
+2026-03-27 11:54:43,238 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:43,246 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:43] "GET /conversation/15?role=client HTTP/1.1" 200 -
+2026-03-27 11:54:43,569 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:43,570 - __main__ - INFO - GET /conversation/15
+2026-03-27 11:54:43,573 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:43,788 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:43,799 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:43,801 - __main__ - INFO - Response: [{'conversation_id': 3, 'last_message': 'hi', 'other_user': {'id': 15, 'name': 's', 'profile_pic': None}, 'participants': [15, 15], 'updatedAt': 1774555909}, {'conversation_id': 2, 'last_message': 'hu', 'other_user': {'id': 17, 'name': 'vedika wagh', 'profile_pic': None}, 'participants': [15, 17], 'updatedAt': 1774527270}]
+2026-03-27 11:54:43,815 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:43,834 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:43] "GET /conversation/15?role=client HTTP/1.1" 200 -
+2026-03-27 11:54:44,138 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "[35m[1mGET /socket.io/?EIO=4&transport=websocket HTTP/1.1[0m" 500 -
+2026-03-27 11:54:44,159 - werkzeug - ERROR - Error on request:
+Traceback (most recent call last):
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 370, in run_wsgi
+    execute(self.server.app)
+    ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 336, in execute
+    write(b"")
+    ~~~~~^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 261, in write
+    assert status_set is not None, "write() before start_response"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: write() before start_response
+2026-03-27 11:54:44,368 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,369 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,372 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,373 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:44,375 - __main__ - INFO - OPTIONS /client/saved-freelancers
+2026-03-27 11:54:44,378 - __main__ - INFO - OPTIONS /client/saved-freelancers
+2026-03-27 11:54:44,384 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,388 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,389 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,398 - __main__ - INFO - Payload: None
+2026-03-27 11:54:44,405 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,406 - __main__ - INFO - OPTIONS /client/saved-freelancers
+2026-03-27 11:54:44,423 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,436 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,436 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,439 - __main__ - INFO - OPTIONS /client/saved-freelancers
+2026-03-27 11:54:44,440 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,443 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,449 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,456 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,469 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,470 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,471 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,473 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "OPTIONS /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:44,483 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,487 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "OPTIONS /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:44,503 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,504 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,535 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "OPTIONS /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:44,536 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,555 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,572 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "OPTIONS /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:44,655 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:44,656 - __main__ - INFO - GET /client/saved-freelancers
+2026-03-27 11:54:44,669 - __main__ - INFO - Payload: None
+2026-03-27 11:54:44,672 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:44,868 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,876 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,888 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:44,901 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,917 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:44,984 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:44,985 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:44,987 - __main__ - INFO - Response: [{'availability_status': 'AVAILABLE', 'bio': 'muu', 'budget_range': '0.0 - 0.0', 'category': 'Singer', 'experience': 2.0, 'fixed_price': 0.0, 'freelancer_id': 15, 'hourly_rate': 7.0, 'name': 's', 'per_person_rate': 0.0, 'price': 7.0, 'price_display': '₹7.0 / hour', 'price_label': 'Hourly Rate', 'pricing_type': 'hourly', 'profile_image': None, 'rating': 0.0, 'skills': 'singer', 'starting_price': 0.0, 'title': 'singer'}]
+2026-03-27 11:54:44,988 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:44,990 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:44] "GET /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:45,002 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:45,007 - __main__ - INFO - GET /client/saved-freelancers
+2026-03-27 11:54:45,020 - __main__ - INFO - Payload: None
+2026-03-27 11:54:45,022 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:45,248 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:45,250 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:45,253 - __main__ - INFO - Response: [{'availability_status': 'AVAILABLE', 'bio': 'muu', 'budget_range': '0.0 - 0.0', 'category': 'Singer', 'experience': 2.0, 'fixed_price': 0.0, 'freelancer_id': 15, 'hourly_rate': 7.0, 'name': 's', 'per_person_rate': 0.0, 'price': 7.0, 'price_display': '₹7.0 / hour', 'price_label': 'Hourly Rate', 'pricing_type': 'hourly', 'profile_image': None, 'rating': 0.0, 'skills': 'singer', 'starting_price': 0.0, 'title': 'singer'}]
+2026-03-27 11:54:45,254 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:45,261 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:45] "GET /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:45,612 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:45,632 - __main__ - INFO - GET /client/saved-freelancers
+2026-03-27 11:54:45,651 - __main__ - INFO - Payload: None
+2026-03-27 11:54:45,669 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:45,858 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:45,862 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:45,865 - __main__ - INFO - Response: [{'availability_status': 'AVAILABLE', 'bio': 'muu', 'budget_range': '0.0 - 0.0', 'category': 'Singer', 'experience': 2.0, 'fixed_price': 0.0, 'freelancer_id': 15, 'hourly_rate': 7.0, 'name': 's', 'per_person_rate': 0.0, 'price': 7.0, 'price_display': '₹7.0 / hour', 'price_label': 'Hourly Rate', 'pricing_type': 'hourly', 'profile_image': None, 'rating': 0.0, 'skills': 'singer', 'starting_price': 0.0, 'title': 'singer'}]
+2026-03-27 11:54:45,866 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:45,868 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:45] "GET /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:46,181 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:46,183 - __main__ - INFO - GET /client/saved-freelancers
+2026-03-27 11:54:46,185 - __main__ - INFO - Payload: None
+2026-03-27 11:54:46,187 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:46,322 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:46,330 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:46,332 - __main__ - INFO - Response: [{'availability_status': 'AVAILABLE', 'bio': 'muu', 'budget_range': '0.0 - 0.0', 'category': 'Singer', 'experience': 2.0, 'fixed_price': 0.0, 'freelancer_id': 15, 'hourly_rate': 7.0, 'name': 's', 'per_person_rate': 0.0, 'price': 7.0, 'price_display': '₹7.0 / hour', 'price_label': 'Hourly Rate', 'pricing_type': 'hourly', 'profile_image': None, 'rating': 0.0, 'skills': 'singer', 'starting_price': 0.0, 'title': 'singer'}]
+2026-03-27 11:54:46,334 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:46,337 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:46] "GET /client/saved-freelancers?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:47,767 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:47,769 - __main__ - INFO - GET /client/hire/requests
+2026-03-27 11:54:47,772 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:47,773 - __main__ - INFO - Payload: None
+2026-03-27 11:54:47,778 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:47,781 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:47,782 - __main__ - INFO - Payload: None
+2026-03-27 11:54:47,786 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:47,959 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:47,965 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:47,967 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:47,981 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:47,985 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:47] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:48,092 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:48,103 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:48,104 - __main__ - INFO - Response: {'requests': [{'contract_type': 'PROJECT', 'created_at': 1774518689, 'event_status': 'completed', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Wedding Planner', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #13', 'payment_status': 'paid', 'payout_status': 'requested', 'proposed_budget': 3000.0, 'request_id': 32, 'status': 'COMPLETED'}, {'contract_type': 'PROJECT', 'created_at': 1774511109, 'event_status': 'scheduled', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Mehendi Artist', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #12', 'payment_status': 'pending', 'payout_status': 'on_hold', 'proposed_budget': 2000.0, 'request_id': 31, 'status': 'REJECTED'}, {'contract_type': 'FIXED', 'created_at': 1774412521, 'event_status': 's ... [TRUNCATED]
+2026-03-27 11:54:48,106 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:48,114 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:48] "GET /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:48,121 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:48,123 - __main__ - INFO - GET /client/hire/requests
+2026-03-27 11:54:48,126 - __main__ - INFO - Payload: None
+2026-03-27 11:54:48,131 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:48,473 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:48,479 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:48,484 - __main__ - INFO - Response: {'requests': [{'contract_type': 'PROJECT', 'created_at': 1774518689, 'event_status': 'completed', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Wedding Planner', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #13', 'payment_status': 'paid', 'payout_status': 'requested', 'proposed_budget': 3000.0, 'request_id': 32, 'status': 'COMPLETED'}, {'contract_type': 'PROJECT', 'created_at': 1774511109, 'event_status': 'scheduled', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Mehendi Artist', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #12', 'payment_status': 'pending', 'payout_status': 'on_hold', 'proposed_budget': 2000.0, 'request_id': 31, 'status': 'REJECTED'}, {'contract_type': 'FIXED', 'created_at': 1774412521, 'event_status': 's ... [TRUNCATED]
+2026-03-27 11:54:48,485 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:48,489 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:48] "GET /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:52,670 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:52,672 - __main__ - INFO - GET /client/projects
+2026-03-27 11:54:52,680 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:52,683 - __main__ - INFO - Payload: None
+2026-03-27 11:54:52,685 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:52,688 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:54:52,695 - __main__ - INFO - Payload: None
+2026-03-27 11:54:52,715 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:53,022 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:53,023 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:53,045 - __main__ - INFO - Response: {'projects': [{'category': 'Singer', 'client_id': 15, 'created_at': 1774558600, 'description': 'stsftttttttttttttttttttttttttttttttttttttt', 'id': 69, 'location': 'mumbai', 'pricing_type': 'hourly', 'status': 'active', 'title': 'i want sin'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774518516, 'description': 'fffffffffffffffffffffffffffffffffffffffffffffffffffff', 'id': 68, 'location': 'mumbai', 'pricing_type': 'project', 'status': 'ASSIGNED', 'title': 'wedding'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774510939, 'description': 'khhddddddddddddddddddddddddddddddddddddddd', 'id': 67, 'location': 'mumbai', 'pricing_type': None, 'status': 'active', 'title': 'weeding'}, {'category': 'Mehendi Artist', 'client_id': 15, 'created_at': 1774506649, 'description': 'hsbbduhuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu', 'id': 66, 'location': 'mumbai', 'pricing_type': None, 'status': 'ASSIGNED', 'title': 'mehndi'}, {'category': 'DJ', 'client_id': 15, 'created_at':  ... [TRUNCATED]
+2026-03-27 11:54:53,066 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:53,118 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:53] "GET /client/projects?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:53,132 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:53,139 - __main__ - INFO - GET /client/projects
+2026-03-27 11:54:53,140 - __main__ - INFO - Payload: None
+2026-03-27 11:54:53,150 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:53,164 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:53,166 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:53,167 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:54:53,205 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:53,262 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:53] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:53,347 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:53,348 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:53,350 - __main__ - INFO - Response: {'projects': [{'category': 'Singer', 'client_id': 15, 'created_at': 1774558600, 'description': 'stsftttttttttttttttttttttttttttttttttttttt', 'id': 69, 'location': 'mumbai', 'pricing_type': 'hourly', 'status': 'active', 'title': 'i want sin'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774518516, 'description': 'fffffffffffffffffffffffffffffffffffffffffffffffffffff', 'id': 68, 'location': 'mumbai', 'pricing_type': 'project', 'status': 'ASSIGNED', 'title': 'wedding'}, {'category': 'Wedding Planner', 'client_id': 15, 'created_at': 1774510939, 'description': 'khhddddddddddddddddddddddddddddddddddddddd', 'id': 67, 'location': 'mumbai', 'pricing_type': None, 'status': 'active', 'title': 'weeding'}, {'category': 'Mehendi Artist', 'client_id': 15, 'created_at': 1774506649, 'description': 'hsbbduhuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu', 'id': 66, 'location': 'mumbai', 'pricing_type': None, 'status': 'ASSIGNED', 'title': 'mehndi'}, {'category': 'DJ', 'client_id': 15, 'created_at':  ... [TRUNCATED]
+2026-03-27 11:54:53,352 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:53,355 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:53] "GET /client/projects?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:54:53,454 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:53,455 - __main__ - INFO - GET /projects/list
+2026-03-27 11:54:53,456 - __main__ - INFO - Payload: None
+2026-03-27 11:54:53,456 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:53,751 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:53,756 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:53,764 - __main__ - INFO - Response: {'projects': [{'agreed_price': 3000.0, 'client_id': 15, 'created_at': 'Thu, 26 Mar 2026 15:30:55 GMT', 'end_date': None, 'end_time': None, 'event_status': 'completed', 'freelancer_email': 'waghvedika45@gmail.com', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'hire_id': 32, 'id': 1, 'payment_status': 'paid', 'payout_status': 'requested', 'pricing_type': None, 'start_date': None, 'start_time': None, 'status': 'VERIFIED', 'title': 'Project: Wedding Planner'}], 'success': True}
+2026-03-27 11:54:53,766 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:53,768 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:53] "GET /projects/list?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:54:54,080 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:54:54,082 - __main__ - INFO - GET /projects/list
+2026-03-27 11:54:54,084 - __main__ - INFO - Payload: None
+2026-03-27 11:54:54,085 - __main__ - INFO - ==========================================================
+2026-03-27 11:54:54,371 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:54:54,373 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:54:54,376 - __main__ - INFO - Response: {'projects': [{'agreed_price': 3000.0, 'client_id': 15, 'created_at': 'Thu, 26 Mar 2026 15:30:55 GMT', 'end_date': None, 'end_time': None, 'event_status': 'completed', 'freelancer_email': 'waghvedika45@gmail.com', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'hire_id': 32, 'id': 1, 'payment_status': 'paid', 'payout_status': 'requested', 'pricing_type': None, 'start_date': None, 'start_time': None, 'status': 'VERIFIED', 'title': 'Project: Wedding Planner'}], 'success': True}
+2026-03-27 11:54:54,380 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:54:54,384 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:54:54] "GET /projects/list?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:55:02,103 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:02,146 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:55:02,298 - __main__ - INFO - Payload: None
+2026-03-27 11:55:02,427 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:02,646 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:02,648 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:02,652 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:55:02,653 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:02,655 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:02] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:55:08,010 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:08,015 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:55:08,018 - __main__ - INFO - Payload: None
+2026-03-27 11:55:08,023 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:08,326 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:08,347 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:08,349 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:08,366 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:55:08,396 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:08,403 - __main__ - INFO - GET /client/hire/requests
+2026-03-27 11:55:08,405 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:08] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:55:08,415 - __main__ - INFO - Payload: None
+2026-03-27 11:55:08,417 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:08,794 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:08,800 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:08,806 - __main__ - INFO - Response: {'requests': [{'contract_type': 'PROJECT', 'created_at': 1774518689, 'event_status': 'completed', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Wedding Planner', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #13', 'payment_status': 'paid', 'payout_status': 'requested', 'proposed_budget': 3000.0, 'request_id': 32, 'status': 'COMPLETED'}, {'contract_type': 'PROJECT', 'created_at': 1774511109, 'event_status': 'scheduled', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Mehendi Artist', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #12', 'payment_status': 'pending', 'payout_status': 'on_hold', 'proposed_budget': 2000.0, 'request_id': 31, 'status': 'REJECTED'}, {'contract_type': 'FIXED', 'created_at': 1774412521, 'event_status': 's ... [TRUNCATED]
+2026-03-27 11:55:08,815 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:08,823 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:08] "GET /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:55:09,148 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:09,149 - __main__ - INFO - GET /client/hire/requests
+2026-03-27 11:55:09,150 - __main__ - INFO - Payload: None
+2026-03-27 11:55:09,151 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:09,423 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:09,429 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:09,431 - __main__ - INFO - Response: {'requests': [{'contract_type': 'PROJECT', 'created_at': 1774518689, 'event_status': 'completed', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Wedding Planner', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #13', 'payment_status': 'paid', 'payout_status': 'requested', 'proposed_budget': 3000.0, 'request_id': 32, 'status': 'COMPLETED'}, {'contract_type': 'PROJECT', 'created_at': 1774511109, 'event_status': 'scheduled', 'final_agreed_amount': None, 'freelancer_category': 'Mehendi Artist', 'freelancer_id': 17, 'freelancer_name': 'vedika wagh', 'job_title': 'Project: Mehendi Artist', 'negotiation_status': 'REQUESTED', 'note': 'Created from project application #12', 'payment_status': 'pending', 'payout_status': 'on_hold', 'proposed_budget': 2000.0, 'request_id': 31, 'status': 'REJECTED'}, {'contract_type': 'FIXED', 'created_at': 1774412521, 'event_status': 's ... [TRUNCATED]
+2026-03-27 11:55:09,432 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:09,436 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:09] "GET /client/hire/requests?client_id=15 HTTP/1.1" 200 -
+2026-03-27 11:55:18,850 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:18,853 - __main__ - INFO - GET /notifications/unread-count
+2026-03-27 11:55:18,856 - __main__ - INFO - Payload: None
+2026-03-27 11:55:18,866 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:18,868 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:18,871 - __main__ - INFO - GET /conversation/15
+2026-03-27 11:55:18,873 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:19,163 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:19,169 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:19,170 - __main__ - INFO - Response: {'success': True, 'unread_count': 7}
+2026-03-27 11:55:19,171 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:19,180 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:19] "GET /notifications/unread-count?user_id=15&role=client HTTP/1.1" 200 -
+2026-03-27 11:55:19,181 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:19,188 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:19,197 - __main__ - INFO - Response: [{'conversation_id': 3, 'last_message': 'hi', 'other_user': {'id': 15, 'name': 's', 'profile_pic': None}, 'participants': [15, 15], 'updatedAt': 1774555909}, {'conversation_id': 2, 'last_message': 'hu', 'other_user': {'id': 17, 'name': 'vedika wagh', 'profile_pic': None}, 'participants': [15, 17], 'updatedAt': 1774527270}]
+2026-03-27 11:55:19,202 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:19,204 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:19] "GET /conversation/15?role=client HTTP/1.1" 200 -
+2026-03-27 11:55:19,265 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:19,270 - __main__ - INFO - GET /conversation/15
+2026-03-27 11:55:19,272 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:19,431 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:19,432 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:19,433 - __main__ - INFO - Response: [{'conversation_id': 3, 'last_message': 'hi', 'other_user': {'id': 15, 'name': 's', 'profile_pic': None}, 'participants': [15, 15], 'updatedAt': 1774555909}, {'conversation_id': 2, 'last_message': 'hu', 'other_user': {'id': 17, 'name': 'vedika wagh', 'profile_pic': None}, 'participants': [15, 17], 'updatedAt': 1774527270}]
+2026-03-27 11:55:19,434 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:19,435 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:19] "GET /conversation/15?role=client HTTP/1.1" 200 -
+2026-03-27 11:55:33,086 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:33] "[35m[1mGET /socket.io/?EIO=4&transport=websocket HTTP/1.1[0m" 500 -
+2026-03-27 11:55:33,095 - werkzeug - ERROR - Error on request:
+Traceback (most recent call last):
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 370, in run_wsgi
+    execute(self.server.app)
+    ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 336, in execute
+    write(b"")
+    ~~~~~^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 261, in write
+    assert status_set is not None, "write() before start_response"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: write() before start_response
+2026-03-27 11:55:33,639 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:33,652 - __main__ - INFO - GET /api/public/platform-stats
+2026-03-27 11:55:33,667 - __main__ - INFO - Payload: None
+2026-03-27 11:55:33,719 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:36,799 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:36,853 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:36,922 - __main__ - INFO - Response: {'data': {'average_rating': 4.7, 'total_artists': 13, 'total_projects_completed': 0}, 'success': True}
+2026-03-27 11:55:37,061 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:37,153 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:37] "GET /api/public/platform-stats HTTP/1.1" 200 -
+2026-03-27 11:55:37,568 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 11:55:37,818 - __main__ - INFO - GET /api/public/platform-stats
+2026-03-27 11:55:38,153 - __main__ - INFO - Payload: None
+2026-03-27 11:55:38,448 - __main__ - INFO - ==========================================================
+2026-03-27 11:55:40,255 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 11:55:40,256 - __main__ - INFO - Status: 200 OK
+2026-03-27 11:55:40,259 - __main__ - INFO - Response: {'data': {'average_rating': 4.7, 'total_artists': 13, 'total_projects_completed': 0}, 'success': True}
+2026-03-27 11:55:40,262 - __main__ - INFO - ==========================================================
+
+2026-03-27 11:55:40,264 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 11:55:40] "GET /api/public/platform-stats HTTP/1.1" 200 -
+2026-03-27 12:05:17,684 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 12:05:17] "[35m[1mGET /socket.io/?EIO=4&transport=websocket HTTP/1.1[0m" 500 -
+2026-03-27 12:05:17,707 - werkzeug - ERROR - Error on request:
+Traceback (most recent call last):
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 370, in run_wsgi
+    execute(self.server.app)
+    ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 336, in execute
+    write(b"")
+    ~~~~~^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 261, in write
+    assert status_set is not None, "write() before start_response"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: write() before start_response
+2026-03-27 12:06:02,109 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 12:06:02] "[35m[1mGET /socket.io/?EIO=4&transport=websocket HTTP/1.1[0m" 500 -
+2026-03-27 12:06:02,133 - werkzeug - ERROR - Error on request:
+Traceback (most recent call last):
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 370, in run_wsgi
+    execute(self.server.app)
+    ~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 336, in execute
+    write(b"")
+    ~~~~~^^^^^
+  File "C:\Users\Sarthak Sawant\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\serving.py", line 261, in write
+    assert status_set is not None, "write() before start_response"
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: write() before start_response
+2026-03-27 12:06:28,045 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 12:06:28,052 - __main__ - INFO - GET /api/public/platform-stats
+2026-03-27 12:06:28,060 - __main__ - INFO - Payload: None
+2026-03-27 12:06:28,061 - __main__ - INFO - ==========================================================
+2026-03-27 12:06:28,404 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 12:06:28,405 - __main__ - INFO - Status: 200 OK
+2026-03-27 12:06:28,406 - __main__ - INFO - Response: {'data': {'average_rating': 4.7, 'total_artists': 13, 'total_projects_completed': 0}, 'success': True}
+2026-03-27 12:06:28,409 - __main__ - INFO - ==========================================================
+
+2026-03-27 12:06:28,412 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 12:06:28] "GET /api/public/platform-stats HTTP/1.1" 200 -
+2026-03-27 12:06:28,418 - __main__ - INFO - 
+==================== INCOMING REQUEST ====================
+2026-03-27 12:06:28,418 - __main__ - INFO - GET /api/public/platform-stats
+2026-03-27 12:06:28,419 - __main__ - INFO - Payload: None
+2026-03-27 12:06:28,420 - __main__ - INFO - ==========================================================
+2026-03-27 12:06:28,575 - __main__ - INFO - 
+==================== OUTGOING RESPONSE ===================
+2026-03-27 12:06:28,579 - __main__ - INFO - Status: 200 OK
+2026-03-27 12:06:28,581 - __main__ - INFO - Response: {'data': {'average_rating': 4.7, 'total_artists': 13, 'total_projects_completed': 0}, 'success': True}
+2026-03-27 12:06:28,582 - __main__ - INFO - ==========================================================
+
+2026-03-27 12:06:28,584 - werkzeug - INFO - 127.0.0.1 - - [27/Mar/2026 12:06:28] "GET /api/public/platform-stats HTTP/1.1" 200 -

@@ -81,6 +81,7 @@ def configure_cors(app):
     # Get allowed origins from environment or use defaults
     allowed_origins = [
         "https://gigbridge.com",  # Production
+        "https://delightful-licorice-5d77ee.netlify.app",  # Deployed frontend
         "http://localhost:3000",   # Development (Vite/React)
         "http://127.0.0.1:3000",
         "http://localhost:5173",   # Default Vite port
