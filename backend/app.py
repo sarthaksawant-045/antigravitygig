@@ -453,11 +453,22 @@ def init_semantic_search():
 # EMAIL CONFIG
 # ============================================================
 
-SENDER_EMAIL = os.getenv("GIGBRIDGE_SENDER_EMAIL", "gigbridgee@gmail.com")
-APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
+SENDER_EMAIL = (
+    os.getenv("GIGBRIDGE_SENDER_EMAIL")
+    or os.getenv("EMAIL_USER")
+    or ""
+).strip()
+APP_PASSWORD = (
+    os.getenv("GIGBRIDGE_APP_PASSWORD")
+    or os.getenv("EMAIL_PASSWORD")
+    or ""
+).strip()
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_HOST = (os.getenv("EMAIL_HOST") or "smtp.gmail.com").strip()
+try:
+    SMTP_PORT = int(os.getenv("EMAIL_PORT") or "587")
+except ValueError:
+    SMTP_PORT = 587
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
 EMAIL_LOGO_URL = os.getenv("EMAIL_LOGO_URL", f"{FRONTEND_BASE_URL}/assets/gigbridgelogo.png")
 
@@ -1278,9 +1289,25 @@ def client_send_otp():
             if conn:
                 conn.close()
 
-        # Send email in background to prevent blocking the response
-        import threading
-        threading.Thread(target=send_otp_email, args=(email, otp), daemon=True).start()
+        email_sent = send_otp_email(email, otp)
+        if not email_sent:
+            cleanup_conn = None
+            try:
+                cleanup_conn = client_db()
+                cleanup_cur = get_dict_cursor(cleanup_conn)
+                cleanup_cur.execute("DELETE FROM client_otp WHERE email=%s", (email,))
+                cleanup_conn.commit()
+            except Exception:
+                if cleanup_conn:
+                    cleanup_conn.rollback()
+            finally:
+                if cleanup_conn:
+                    cleanup_conn.close()
+
+            return jsonify({
+                "success": False,
+                "msg": "Failed to send OTP email. Please check email settings and try again."
+            }), 500
 
         return jsonify({"success": True, "msg": "OTP sent"})
         
@@ -1422,9 +1449,25 @@ def freelancer_send_otp():
         if conn:
             conn.close()
 
-    # Send email in background to prevent blocking the response
-    import threading
-    threading.Thread(target=send_otp_email, args=(email, otp), daemon=True).start()
+    email_sent = send_otp_email(email, otp)
+    if not email_sent:
+        cleanup_conn = None
+        try:
+            cleanup_conn = freelancer_db()
+            cleanup_cur = get_dict_cursor(cleanup_conn)
+            cleanup_cur.execute("DELETE FROM freelancer_otp WHERE email=%s", (email,))
+            cleanup_conn.commit()
+        except Exception:
+            if cleanup_conn:
+                cleanup_conn.rollback()
+        finally:
+            if cleanup_conn:
+                cleanup_conn.close()
+
+        return jsonify({
+            "success": False,
+            "msg": "Failed to send OTP email. Please check email settings and try again."
+        }), 500
 
     return jsonify({"success": True, "msg": "OTP sent"})
 
