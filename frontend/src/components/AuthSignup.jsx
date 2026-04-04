@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { buildApiUrl, getApiConnectionHelp, getGoogleAuthRedirectMismatchMessage } from "../config/runtime";
 import { authService } from "../services";
 
 export default function AuthSignup() {
   const { role = "freelancer" } = useParams();
   const navigate = useNavigate();
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "https://antigravitygig-2.onrender.com";
   const isFreelancer = role !== "client";
   const switchRole = (next) => navigate(`/signup/${next}`);
 
@@ -25,21 +25,32 @@ export default function AuthSignup() {
   const handleGoogleSignup = async () => {
     setGoogleLoading(true);
     setError("");
+    const encodedRole = encodeURIComponent(role);
     try {
-      let response = await fetch(`${apiBase}/auth/google?role=${role}`);
+      let response = await fetch(buildApiUrl(`/auth/google?role=${encodedRole}`));
       let data = await response.json();
 
       if (response.status === 404) {
-        response = await fetch(`${apiBase}/auth/google/start?role=${role}`);
+        response = await fetch(buildApiUrl(`/auth/google/start?role=${encodedRole}`));
         data = await response.json();
       }
 
       if (!response.ok || data?.success === false || !data?.auth_url) {
         throw new Error(data?.msg || "Google signup is not available right now.");
       }
+
+      const configError = getGoogleAuthRedirectMismatchMessage(data.auth_url);
+      if (configError) {
+        throw new Error(configError);
+      }
+
       window.location.href = data.auth_url;
     } catch (err) {
-      setError(err.message || "Google signup failed. Please try again.");
+      const message =
+        err?.message === "Failed to fetch"
+          ? `Google signup could not reach the backend. ${getApiConnectionHelp()}`
+          : err.message || "Google signup failed. Please try again.";
+      setError(message);
       setGoogleLoading(false);
     }
   };

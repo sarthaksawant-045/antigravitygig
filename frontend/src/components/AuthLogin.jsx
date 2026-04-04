@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { buildApiUrl, getApiConnectionHelp, getGoogleAuthRedirectMismatchMessage } from "../config/runtime";
 import { useAuth } from "../context/AuthContext.jsx";
 import { authService } from "../services";
 
@@ -9,8 +10,6 @@ export default function AuthLogin() {
   const { login } = useAuth();
   const isFreelancer = role !== "client";
   const switchRole = (next) => navigate(`/login/${next}`);
-
-  const apiBase = import.meta.env.VITE_API_BASE_URL || "https://antigravitygig-2.onrender.com";
 
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -26,21 +25,32 @@ export default function AuthLogin() {
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError("");
+    const encodedRole = encodeURIComponent(role);
     try {
-      let response = await fetch(`${apiBase}/auth/google?role=${role}`);
+      let response = await fetch(buildApiUrl(`/auth/google?role=${encodedRole}`));
       let data = await response.json();
 
       if (response.status === 404) {
-        response = await fetch(`${apiBase}/auth/google/start?role=${role}`);
+        response = await fetch(buildApiUrl(`/auth/google/start?role=${encodedRole}`));
         data = await response.json();
       }
 
       if (!response.ok || data?.success === false || !data?.auth_url) {
         throw new Error(data?.msg || "Google login is not available right now.");
       }
+
+      const configError = getGoogleAuthRedirectMismatchMessage(data.auth_url);
+      if (configError) {
+        throw new Error(configError);
+      }
+
       window.location.href = data.auth_url;
     } catch (err) {
-      setError(err.message || "Google login failed. Please try again.");
+      const message =
+        err?.message === "Failed to fetch"
+          ? `Google login could not reach the backend. ${getApiConnectionHelp()}`
+          : err.message || "Google login failed. Please try again.";
+      setError(message);
       setGoogleLoading(false);
     }
   };
@@ -94,7 +104,7 @@ export default function AuthLogin() {
             </button>
           </div>
 
-          {error && <div style={{color: '#dc2626', marginBottom: '1rem', fontSize: '0.9rem'}}>{error}</div>}
+          {error && <div style={{ color: '#dc2626', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <label>
@@ -137,10 +147,10 @@ export default function AuthLogin() {
               </div>
             </label>
 
-            <div style={{textAlign: 'right', marginTop: '-0.5rem', marginBottom: '0.5rem'}}>
+            <div style={{ textAlign: 'right', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
               <Link
                 to={`/forgot-password/${role}`}
-                style={{fontSize: '0.85rem', color: '#2563eb', textDecoration: 'none'}}
+                style={{ fontSize: '0.85rem', color: '#2563eb', textDecoration: 'none' }}
               >
                 Forgot Password?
               </Link>

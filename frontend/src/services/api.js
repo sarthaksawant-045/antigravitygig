@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
+import { API_BASE_URL, getApiConnectionHelp } from '../config/runtime';
 
 class ApiError extends Error {
   constructor(message, status, data) {
@@ -87,7 +87,7 @@ async function request(endpoint, options = {}) {
     // Network errors
     if (error.message === 'Failed to fetch') {
       console.error('Network error - unable to connect to backend:', error);
-      throw new ApiError('Unable to connect to the server. Please check if the backend is running on ' + API_BASE_URL, 0, null);
+      throw new ApiError(`Unable to connect to the server. ${getApiConnectionHelp()}`, 0, null);
     }
     
     throw new ApiError(error.message || 'Network error', 0, null);

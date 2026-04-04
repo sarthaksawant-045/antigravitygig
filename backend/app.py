@@ -7,7 +7,7 @@ import os
 load_dotenv()
 from datetime import datetime
 from html import escape
-from flask import Flask, request, jsonify, send_from_directory, redirect
+from flask import Flask, request, jsonify, send_from_directory, redirect, has_request_context
 from database import client_db, freelancer_db, mark_job_completed
 from psycopg2.extras import RealDictCursor
 from postgres_config import get_postgres_connection, get_dict_cursor
@@ -484,13 +484,75 @@ OTP_TTL_SECONDS = 5 * 60  # 5 minutes
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-
-# Google Redirect URI: prioritize explicit env var, then derive from BACKEND_URL, else fallback to localhost
-backend_url = os.getenv("BACKEND_URL", "http://127.0.0.1:5000").rstrip("/")
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", f"{backend_url}/auth/google/callback")
+DEFAULT_LOCAL_BACKEND_URL = "http://127.0.0.1:5000"
+DEFAULT_LOCAL_FRONTEND_URL = "http://localhost:5173"
+BACKEND_URL = os.getenv("BACKEND_URL", "").rstrip("/")
+EXPLICIT_GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "").rstrip("/")
 
 # state -> { role, created_at, done, result }
 GOOGLE_OAUTH_STATES = {}
+
+
+def _get_request_base_url():
+    """Build the public backend origin from the active request when possible."""
+    forwarded_proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "http").split(",")[0].strip()
+    forwarded_host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
+
+    if forwarded_host:
+        return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+
+    return request.host_url.rstrip("/")
+
+
+def get_backend_base_url():
+    if BACKEND_URL:
+        return BACKEND_URL
+
+    if has_request_context():
+        return _get_request_base_url()
+
+    return DEFAULT_LOCAL_BACKEND_URL
+
+
+def get_google_redirect_uri():
+    if EXPLICIT_GOOGLE_REDIRECT_URI:
+        return EXPLICIT_GOOGLE_REDIRECT_URI
+
+    return f"{get_backend_base_url()}/auth/google/callback"
+
+
+def _normalize_origin(url):
+    return (url or "").strip().rstrip("/")
+
+
+def get_google_allowed_frontend_origins():
+    origins = {
+        DEFAULT_LOCAL_FRONTEND_URL,
+        "http://127.0.0.1:5173",
+        _normalize_origin(FRONTEND_BASE_URL),
+        _normalize_origin(os.getenv("FRONTEND_URL", "")),
+    }
+
+    additional_origins = os.getenv("CORS_ORIGINS", "")
+    for origin in additional_origins.split(","):
+        normalized = _normalize_origin(origin)
+        if normalized:
+            origins.add(normalized)
+
+    return {origin for origin in origins if origin}
+
+
+def get_google_frontend_base_url():
+    default_base = _normalize_origin(FRONTEND_BASE_URL or DEFAULT_LOCAL_FRONTEND_URL)
+
+    if not has_request_context():
+        return default_base
+
+    request_origin = _normalize_origin(request.headers.get("Origin", ""))
+    if request_origin and request_origin in get_google_allowed_frontend_origins():
+        return request_origin
+
+    return default_base
 
 def _google_state_cleanup():
     now = now_ts()
@@ -502,8 +564,8 @@ def _google_state_cleanup():
         GOOGLE_OAUTH_STATES.pop(k, None)
 
 
-def _google_frontend_callback_url(params):
-    base = (FRONTEND_BASE_URL or "http://localhost:5173").rstrip("/")
+def _google_frontend_callback_url(params, base_url=None):
+    base = _normalize_origin(base_url or FRONTEND_BASE_URL or DEFAULT_LOCAL_FRONTEND_URL)
     query = urllib.parse.urlencode(params)
     return f"{base}/auth/callback?{query}"
 
@@ -5333,16 +5395,21 @@ def google_oauth_start():
 
     state = secrets.token_urlsafe(24)
 
+    redirect_uri = get_google_redirect_uri()
+    frontend_base_url = get_google_frontend_base_url()
+
     GOOGLE_OAUTH_STATES[state] = {
         "role": role,
         "created_at": now_ts(),
         "done": False,
-        "result": None
+        "result": None,
+        "redirect_uri": redirect_uri,
+        "frontend_base_url": frontend_base_url,
     }
 
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "state": state,
@@ -5351,7 +5418,13 @@ def google_oauth_start():
     }
 
     auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
-    return jsonify({"success": True, "auth_url": auth_url, "state": state})
+    return jsonify({
+        "success": True,
+        "auth_url": auth_url,
+        "state": state,
+        "redirect_uri": redirect_uri,
+        "frontend_base_url": frontend_base_url,
+    })
 
 
 @app.route("/auth/google/callback", methods=["GET"])
@@ -5360,19 +5433,22 @@ def google_oauth_callback():
 
     code = request.args.get("code")
     state = request.args.get("state")
+    frontend_base_url = get_google_frontend_base_url()
 
     if not code or not state:
         return redirect(_google_frontend_callback_url({
             "error": "Missing code or state from Google."
-        }))
+        }, frontend_base_url))
 
     st = GOOGLE_OAUTH_STATES.get(state)
     if not st:
         return redirect(_google_frontend_callback_url({
             "error": "Google login session expired. Please try again."
-        }))
+        }, frontend_base_url))
 
     role = st["role"]
+    redirect_uri = st.get("redirect_uri") or get_google_redirect_uri()
+    frontend_base_url = st.get("frontend_base_url") or frontend_base_url
 
     # 1) Exchange code -> tokens
     token_res = requests.post(
@@ -5381,7 +5457,7 @@ def google_oauth_callback():
             "code": code,
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": GOOGLE_CLIENT_SECRET,
-            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "redirect_uri": redirect_uri,
             "grant_type": "authorization_code"
         },
         timeout=15
@@ -5392,7 +5468,7 @@ def google_oauth_callback():
         st["result"] = {"success": False, "msg": "Token exchange failed"}
         return redirect(_google_frontend_callback_url({
             "error": "Google token exchange failed. Please try again."
-        }))
+        }, frontend_base_url))
 
     token_data = token_res.json()
     id_token = token_data.get("id_token")
@@ -5401,7 +5477,7 @@ def google_oauth_callback():
         st["result"] = {"success": False, "msg": "No id_token returned"}
         return redirect(_google_frontend_callback_url({
             "error": "Google did not return an ID token."
-        }))
+        }, frontend_base_url))
 
     # 2) Verify ID token using Google's tokeninfo endpoint (no extra libs needed)
     info_res = requests.get(
@@ -5415,7 +5491,7 @@ def google_oauth_callback():
         st["result"] = {"success": False, "msg": "Token verification failed"}
         return redirect(_google_frontend_callback_url({
             "error": "Google token verification failed."
-        }))
+        }, frontend_base_url))
 
     info = info_res.json()
 
@@ -5431,14 +5507,14 @@ def google_oauth_callback():
         st["result"] = {"success": False, "msg": "Invalid token audience"}
         return redirect(_google_frontend_callback_url({
             "error": "Invalid Google token audience."
-        }))
+        }, frontend_base_url))
 
     if not email or not sub:
         st["done"] = True
         st["result"] = {"success": False, "msg": "Email not available"}
         return redirect(_google_frontend_callback_url({
             "error": "Google account email is not available."
-        }))
+        }, frontend_base_url))
 
     # optional strict check
     if email_verified and email_verified not in ("true", "1", "yes"):
@@ -5446,7 +5522,7 @@ def google_oauth_callback():
         st["result"] = {"success": False, "msg": "Email not verified"}
         return redirect(_google_frontend_callback_url({
             "error": "Google email is not verified."
-        }))
+        }, frontend_base_url))
 
     # 3) Upsert user into correct DB based on role
     if role == "client":
@@ -5484,7 +5560,7 @@ def google_oauth_callback():
                 "name": name,
                 "picture": info.get("picture", ""),
                 "profile_completed": "1" if profile_done else "0",
-            }))
+            }, frontend_base_url))
 
         if not name:
             name = email.split("@")[0]
@@ -5522,7 +5598,7 @@ def google_oauth_callback():
             "name": name,
             "picture": info.get("picture", ""),
             "profile_completed": "1" if profile_done else "0",
-        }))
+        }, frontend_base_url))
 
     else:
         conn = freelancer_db()
@@ -5559,7 +5635,7 @@ def google_oauth_callback():
                 "name": name,
                 "picture": info.get("picture", ""),
                 "profile_completed": "1" if profile_done else "0",
-            }))
+            }, frontend_base_url))
 
         if not name:
             name = email.split("@")[0]
@@ -5597,7 +5673,7 @@ def google_oauth_callback():
             "name": name,
             "picture": info.get("picture", ""),
             "profile_completed": "1" if profile_done else "0",
-        }))
+        }, frontend_base_url))
 
 
 @app.route("/auth/google/status", methods=["GET"])
@@ -8568,8 +8644,8 @@ import razorpay
 import hmac
 import hashlib
 
-RAZORPAY_KEY_ID = 'rzp_test_SUJ9gz60CfdMWX'
-RAZORPAY_KEY_SECRET = 'KiHXGap8Xly3BH7YRTi6Da0D'
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 
 try:
     razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
