@@ -354,8 +354,6 @@ APP_PASSWORD = (
     or os.getenv("EMAIL_PASSWORD")
     or ""
 ).strip()
-SENDER_EMAIL = os.getenv("GIGBRIDGE_SENDER_EMAIL", "gigbridgee@gmail.com")
-APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
 
 
 SMTP_HOST = (os.getenv("EMAIL_HOST") or "smtp.gmail.com").strip()
