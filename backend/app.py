@@ -15,6 +15,7 @@ from booking_service import validate_hire_request_slot, format_time_slot_display
 import random
 import time
 import smtplib
+import socket
 import os
 import requests
 import secrets
@@ -1149,7 +1150,10 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
     server = None
     try:
         logger.info(f"[EMAIL] Connecting to {SMTP_HOST}:{SMTP_PORT} as {SENDER_EMAIL}")
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
+        # Force IPv4 to avoid 'Network is unreachable' on cloud platforms (Render)
+        smtp_ip = socket.getaddrinfo(SMTP_HOST, SMTP_PORT, socket.AF_INET)[0][4][0]
+        logger.info(f"[EMAIL] Resolved {SMTP_HOST} -> {smtp_ip} (IPv4)")
+        server = smtplib.SMTP(smtp_ip, SMTP_PORT, timeout=30)
         server.starttls()
         server.login(SENDER_EMAIL, APP_PASSWORD)
         server.send_message(msg)
