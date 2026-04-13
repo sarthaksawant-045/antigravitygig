@@ -139,7 +139,7 @@ export default function PaymentPage() {
     <main className="payments-page">
       <header className="payments-header">
         <h1>Hires & Payments</h1>
-        <p>Track your payments, reviews, and earnings in one place.</p>
+        <p>Track your payments, reviews, and total expenditure in one place.</p>
       </header>
 
       {error && <div className="payments-alert payments-alert-error">{error}</div>}
@@ -152,7 +152,7 @@ export default function PaymentPage() {
           </div>
           <div>
             <p className="payments-eyebrow">Overview</p>
-            <h2>Total Earnings</h2>
+            <h2>Total Expenditure</h2>
           </div>
         </div>
         <div className="payments-earnings-amount">

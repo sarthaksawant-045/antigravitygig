@@ -31,13 +31,6 @@ from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
 from ticket_routes import ticket_bp
 import logging
-from flask_cors import CORS
-app = Flask(__name__)
-
-CORS(app, origins=[
-    "https://antigravitygig.netlify.app",
-    "https://antigravitygig.netlify.app/"
-])
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,11 +38,7 @@ logger = logging.getLogger(__name__)
 file_handler = logging.FileHandler('persistent_error_log.txt', mode='w', encoding='utf-8')
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(file_handler)
-
-# Also add to werkzeug logger
 logging.getLogger('werkzeug').addHandler(file_handler)
-
-# Initialize Socket.IO
 try:
     from socket_service import socketio
     SOCKET_IO_ENABLED = True
@@ -62,18 +51,14 @@ except Exception as e:
     print(f'[SOCKET] Socket.IO initialization failed: {e}')
     socketio = None
     SOCKET_IO_ENABLED = False
-
 SOCKET_IO_REALLY_WORKING = False
-
 try:
-    # AI chat routes are optional; failure must not block server startup.
     from ai_chat_routes import register_ai_chat_routes
 except Exception as _e:
     register_ai_chat_routes = None
     logger.warning(f"AI chat disabled: {type(_e).__name__}: {_e}")
     import logging
     logging.getLogger(__name__).warning(f"AI chat disabled: {type(_e).__name__}: {_e}")
-
 from database import create_tables, rebuild_freelancer_search_index
 from venue_helper import prepare_venue_data, validate_venue_data, check_venue_freelancer_compatibility
 from settings import (
@@ -92,35 +77,21 @@ from categories import (
 from call_service import start_call, update_call_status, get_incoming_calls
 from notification_utils import enhance_notification_message, get_notification_icon
 from notification_helper import notify_freelancer
-
-
-# ============================================================
-# PRICING DISPLAY HELPER FUNCTIONS
-# ============================================================
-
 def get_price_display(freelancer):
     """Get formatted price display based on pricing type"""
     pricing_type = (freelancer.get("pricing_type") or "").lower()
-    
     if pricing_type == "hourly":
         return f"₹{freelancer.get('hourly_rate', 0)} / hour"
-    
     elif pricing_type == "per_person":
         return f"₹{freelancer.get('per_person_rate', 0)} per person"
-    
     elif pricing_type == "package":
         return f"₹{freelancer.get('starting_price', 0)}"
-    
     elif pricing_type == "project":
         return f"₹{freelancer.get('fixed_price', 0)} (project)"
-    
     return "Not specified"
-
 def enhance_freelancer_with_pricing(freelancer):
     """Enhance freelancer data with pricing display fields"""
     pricing_type = freelancer.get("pricing_type")
-    
-    # Map raw fields to generic 'price' field
     type_val = (pricing_type or "").lower()
     if type_val == "hourly":
         freelancer["price"] = freelancer.get("hourly_rate", 0)
@@ -131,26 +102,19 @@ def enhance_freelancer_with_pricing(freelancer):
     elif type_val in ["fixed", "project"]:
         freelancer["price"] = freelancer.get("fixed_price", 0)
     else:
-        # Fallback to any filled column
         freelancer["price"] = (
             freelancer.get("hourly_rate") or 
             freelancer.get("per_person_rate") or 
             freelancer.get("fixed_price") or 
             freelancer.get("starting_price") or 0
         )
-        
     category = freelancer.get("category")
-    
     if not pricing_type:
         try:
             pricing_type = get_pricing_type_for_category(category)
         except:
             pricing_type = "unknown"
-    
-    # Ensure pricing_type is set
     freelancer["pricing_type"] = pricing_type
-    
-    # Add price display fields
     freelancer["price_display"] = get_price_display(freelancer)
     freelancer["price_label"] = {
         "hourly": "Hourly Rate",
@@ -159,10 +123,7 @@ def enhance_freelancer_with_pricing(freelancer):
         "project": "Project Price",
         "fixed": "Fixed Price"
     }.get(pricing_type, "Price")
-    
     return freelancer
-
-
 def _get_public_platform_stats():
     """Reuse existing aggregate-style admin metrics for public landing stats."""
     conn = freelancer_db()
@@ -170,17 +131,14 @@ def _get_public_platform_stats():
     try:
         cur.execute("SELECT COUNT(*) AS total_freelancers FROM freelancer")
         artists_row = cur.fetchone() or {}
-
         cur.execute("SELECT COUNT(*) AS total_completed_projects FROM projects WHERE status='COMPLETED'")
         projects_row = cur.fetchone() or {}
-
         cur.execute("""
             SELECT AVG(rating) AS average_rating
             FROM freelancer_profile
             WHERE rating IS NOT NULL AND rating > 0
         """)
         rating_row = cur.fetchone() or {}
-
         return {
             "total_artists": int(artists_row.get("total_freelancers") or 0),
             "total_projects_completed": int(projects_row.get("total_completed_projects") or 0),
@@ -188,12 +146,6 @@ def _get_public_platform_stats():
         }
     finally:
         conn.close()
-
-
-# ============================================================
-# AGE VALIDATION UTILITIES
-# ============================================================
-
 def calculate_age(dob_str):
     """Calculate age from DOB string in YYYY-MM-DD format"""
     from datetime import datetime
@@ -204,8 +156,6 @@ def calculate_age(dob_str):
         return age
     except ValueError:
         return None
-
-
 def validate_age(age):
     """Validate age is between 18 and 60 years inclusive"""
     if age < 18:
@@ -213,20 +163,10 @@ def validate_age(age):
     if age > 60:
         return False, "Maximum allowed age is 60 years."
     return True, None
-
-
-# ============================================================
-# Semantic (RAG-style) search helpers
 from semantic_search import load_or_build, semantic_search, upsert_freelancer
 from filters_service import fetch_filtered_freelancers
 from database import create_tables, rebuild_freelancer_search_index, get_freelancer_verification, update_freelancer_verification, get_freelancer_subscription, update_freelancer_subscription, get_freelancer_job_applies, increment_job_applies, check_subscription_expiry, get_freelancer_plan
 from categories import get_pricing_type_for_category, is_valid_category
-
-
-# ============================================================
-# APP INIT
-# ============================================================
-
 from flask_cors import CORS
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -238,13 +178,11 @@ allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 frontend_url = os.getenv("FRONTEND_URL")
 if frontend_url:
     allowed_origins.append(frontend_url)
-
 CORS(
     app,
     resources={r"/*": {"origins": allowed_origins}},
     supports_credentials=True,
 )
-
 @app.route("/api/public/platform-stats", methods=["GET"])
 def public_platform_stats():
     try:
@@ -260,8 +198,6 @@ def public_platform_stats():
                 "average_rating": 0.0,
             }
         }), 500
-
-
 @app.route("/stats", methods=["GET"])
 def landing_stats():
     """
@@ -281,21 +217,14 @@ def landing_stats():
             "completed_projects": 0,
             "avg_rating": 0,
         }), 500
-
 @app.errorhandler(Exception)
 def handle_exception(e):
     # Log the traceback
     logger.exception(f"Unhandled Exception: {e}")
     return jsonify({"success": False, "msg": "Server error occurred"}), 500
-
-# Initialize Socket.IO with the Flask app
 if SOCKET_IO_ENABLED and socketio is not None:
     socketio.init_app(app, cors_allowed_origins="*")
     logger.info('[SOCKET] Socket.IO initialized with Flask app')
-
-# ============================================================
-# VERBOSE LOGGING FOR DEBUGGING
-# ============================================================
 @app.before_request
 def log_request_info():
     if request.path.startswith('/static') or request.path == '/favicon.ico':
@@ -310,7 +239,6 @@ def log_request_info():
     elif request.form:
         logger.info(f"Form Data: {dict(request.form)}")
     logger.info(f"{'='*58}")
-
 @app.after_request
 def log_response_info(response):
     if response.mimetype == "application/json":
@@ -329,23 +257,15 @@ def log_response_info(response):
             pass
     logger.info(f"{'='*58}\n")
     return response
-
-# ============================================================
-# GLOBAL ERROR HANDLERS - ENSURE JSON RESPONSES
-# ============================================================
-
 @app.errorhandler(400)
 def bad_request(error):
     return jsonify({"success": False, "msg": "Bad request"}), 400
-
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({"success": False, "msg": "Endpoint not found"}), 404
-
 @app.errorhandler(405)
 def method_not_allowed(error):
     return jsonify({"success": False, "msg": "Method not allowed"}), 405
-
 @app.errorhandler(500)
 def internal_error(error):
     import traceback
@@ -357,27 +277,15 @@ def internal_error(error):
         "error": str(error),
         "traceback": err_tb
     }), 500
-
 @app.errorhandler(Exception)
 def handle_exception(error):
     import traceback
     err_tb = traceback.format_exc()
     logger.error(f"Unhandled exception: {err_tb}")
-    
-    # Return user-friendly error with traceback (STRICTLY FOR DEBUGGING)
     return jsonify({
         "success": False, 
         "msg": "Server error occurred"
     }), 500
-
-# Table creation moved to main block to prevent startup hangs
-# create_tables()
-# ensure_admin_tables()
-
-# ============================================================
-# STARTUP VALIDATION
-# ============================================================
-
 def validate_startup():
     """Validate database connectivity and required tables"""
     try:
@@ -409,20 +317,12 @@ def validate_startup():
         
     except Exception as e:
         import logging
-        logging.getLogger(__name__).error(f"Startup validation failed: {str(e)}", exc_info=True)
-
-# Startup validation moved to main block
-# validate_startup()
 
 from security import security_middleware, security_request_logging
 from admin_routes import admin_bp # Assuming admin_routes is imported here or earlier
 
 app.config['SECRET_KEY'] = 'dev-secret-key'
-
-# Apply security middleware (CORS, JWT, Rate Limiting, etc.)
 jwt = security_middleware(app)
-
-# Register request logging
 security_request_logging(app)
 
 # Register blueprints
@@ -453,16 +353,8 @@ def init_semantic_search():
 # EMAIL CONFIG
 # ============================================================
 
-SENDER_EMAIL = (
-    os.getenv("GIGBRIDGE_SENDER_EMAIL")
-    or os.getenv("EMAIL_USER")
-    or ""
-).strip()
-APP_PASSWORD = (
-    os.getenv("GIGBRIDGE_APP_PASSWORD")
-    or os.getenv("EMAIL_PASSWORD")
-    or ""
-).strip()
+SENDER_EMAIL = os.getenv("GIGBRIDGE_SENDER_EMAIL", "gigbridgee@gmail.com")
+APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
 
 SMTP_HOST = (os.getenv("EMAIL_HOST") or "smtp.gmail.com").strip()
 try:
@@ -471,10 +363,6 @@ except ValueError:
     SMTP_PORT = 587
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
 EMAIL_LOGO_URL = os.getenv("EMAIL_LOGO_URL", f"{FRONTEND_BASE_URL}/assets/gigbridgelogo.png")
-
-# ============================================================
-# OTP CONFIG
-# ============================================================
 
 OTP_TTL_SECONDS = 5 * 60  # 5 minutes
 
@@ -8287,22 +8175,18 @@ def projects_search():
                 return jsonify({"success": True, "projects": []})
 
         search_pattern = f"%{q}%"
-        if freelancer_category:
-            cur.execute("""
-                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post
-                WHERE status='active'
-                  AND LOWER(category) = LOWER(%s)
-                  AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
-                ORDER BY created_at DESC
-            """, (freelancer_category, search_pattern, search_pattern, search_pattern))
-        else:
-            cur.execute("""
-                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post
-                WHERE status='active'
-                  AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
-                ORDER BY created_at DESC
-            """, (search_pattern, search_pattern, search_pattern))
+        cur.execute("""
+            SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post
+            WHERE status='active'
+              AND (title ILIKE %s OR category ILIKE %s OR description ILIKE %s)
+            ORDER BY created_at DESC
+        """, (search_pattern, search_pattern, search_pattern))
         rows = cur.fetchall()
+        if freelancer_category:
+            rows = [
+                r for r in rows
+                if _normalize_category_key(r.get("category") if isinstance(r, dict) else r[3]) == freelancer_category
+            ]
         
         # If freelancer_id provided, get their applications to mark has_applied
         applied_project_ids = set()
@@ -8342,19 +8226,21 @@ def projects_search():
 # PROJECT POSTING – CLIENT
 # ============================================================
 
+def _normalize_category_key(value):
+    text = str(value or "").strip().lower().replace("_", " ")
+    text = " ".join(text.split())
+    aliases = {
+        "mehndi": "mehendi artist",
+        "mehndi artist": "mehendi artist",
+        "mehendi": "mehendi artist",
+    }
+    return aliases.get(text, text)
+
+
 def _get_freelancer_category(cur, freelancer_id):
     """Return freelancer category for project filtering."""
     if not freelancer_id:
         return None
-
-    def _normalize_category_key(value):
-        text = " ".join(str(value or "").strip().lower().split())
-        aliases = {
-            "mehndi": "mehendi artist",
-            "mehndi artist": "mehendi artist",
-            "mehendi": "mehendi artist",
-        }
-        return aliases.get(text, text)
 
     # Freelancer identity/category lives in the freelancer database, not the client database.
     # Some callers pass a client_db cursor for project queries, so do this lookup separately.
@@ -8511,16 +8397,13 @@ def projects_all():
             if freelancer_category is None:
                 return jsonify({"success": True, "projects": []})
 
-        if freelancer_category:
-            cur.execute("""
-                SELECT id, client_id, title, category, location, pricing_type, description, status, created_at
-                FROM project_post
-                WHERE status='active' AND LOWER(category) = LOWER(%s)
-                ORDER BY created_at DESC
-            """, (freelancer_category,))
-        else:
-            cur.execute("SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post WHERE status='active' ORDER BY created_at DESC")
+        cur.execute("SELECT id, client_id, title, category, location, pricing_type, description, status, created_at FROM project_post WHERE status='active' ORDER BY created_at DESC")
         rows = cur.fetchall()
+        if freelancer_category:
+            rows = [
+                r for r in rows
+                if _normalize_category_key(r.get("category") if isinstance(r, dict) else r[3]) == freelancer_category
+            ]
         
         # If freelancer_id provided, get their applications to mark has_applied
         applied_project_ids = set()
@@ -8984,8 +8867,6 @@ def client_hire_approve():
         return jsonify({"success": False, "msg": "Database error"}), 500
     conn.close()
     return jsonify({"success": True, "msg": "Work approved."})
-
-
 @app.route("/client/hire/review", methods=["POST"])
 def client_hire_review():
     """Client leaves a review containing a 1-5 rating, concluding the contract entirely."""

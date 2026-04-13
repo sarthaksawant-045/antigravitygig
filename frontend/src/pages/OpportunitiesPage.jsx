@@ -175,10 +175,6 @@ function ProjectCard({ project, onApply }) {
           <User size={14} />
           <span>{project.client_name || "Client"}</span>
         </span>
-        <span className="opp-meta-item opp-meta-budget">
-          <CircleDollarSign size={14} />
-          <span>{project.budget_type || "Budget TBD"}</span>
-        </span>
         <span className="opp-meta-item">
           <MapPin size={14} />
           <span>{project.location || "Remote"}</span>

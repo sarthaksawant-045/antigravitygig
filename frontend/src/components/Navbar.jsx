@@ -31,6 +31,11 @@ export default function Navbar() {
 
   const { user, logout } = useAuth();
   const name = user.name || user.email || "User";
+  const profileImage =
+    user?.profile_image ||
+    (user?.role === "client" || user?.role === "Client"
+      ? localStorage.getItem("client_profile_avatar") || ""
+      : "");
   const premiumActive = !!user?.is_premium && !!user?.premium_valid_until && new Date(user.premium_valid_until) > new Date();
   const dashboardPath = getDashboardPath(user);
   const isFreelancerOnboarding = location.pathname.startsWith("/freelancer/create-profile/");
@@ -80,6 +85,7 @@ export default function Navbar() {
             {user.isAuthenticated && (user.role === "client" || user.role === "Client") && (
               <>
                 <li className={location.pathname === "/my-projects" ? "active" : ""} onClick={() => navigate("/my-projects")}>My Projects</li>
+                <li className={location.pathname === "/browse-artists" ? "active" : ""} onClick={() => navigate("/browse-artists")}>Browse Artists</li>
                 <li className={location.pathname === "/client/post-project" ? "active" : ""} onClick={() => navigate("/client/post-project")}>Post a Project</li>
                 <li className={location.pathname === "/payment" ? "active" : ""} onClick={() => navigate("/payment")}>Payments</li>
                 <li className={location.pathname === "/messages" ? "active" : ""} onClick={() => navigate("/messages")}>Messages</li>
@@ -122,7 +128,17 @@ export default function Navbar() {
               )}
 
               <div className="profile-wrap" onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen); }}>
-                <div className="avatar">{name.slice(0,1).toUpperCase()}</div>
+                <div className="avatar">
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt={name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+                    />
+                  ) : (
+                    name.slice(0,1).toUpperCase()
+                  )}
+                </div>
                 <span className="profile-name">{name}</span>
                 {premiumActive && (
                   <span style={{ padding: '4px 8px', borderRadius: '999px', background: '#dbeafe', color: '#1d4ed8', fontSize: '12px', fontWeight: 700 }}>
@@ -143,6 +159,7 @@ export default function Navbar() {
       {!isFreelancerOnboarding && navOpen && (
         <div className="mobile-menu" onClick={(e)=>e.stopPropagation()}>
           <button className={`mobile-item ${location.pathname === '/my-projects' ? 'active' : ''}`} onClick={() => { navigate("/my-projects"); setNavOpen(false); }}>My Projects</button>
+          <button className={`mobile-item ${location.pathname === '/browse-artists' ? 'active' : ''}`} onClick={() => { navigate("/browse-artists"); setNavOpen(false); }}>Browse Artists</button>
           <button className={`mobile-item ${location.pathname === '/client/post-project' ? 'active' : ''}`} onClick={() => { navigate("/client/post-project"); setNavOpen(false); }}>Post a Project</button>
           <button className={`mobile-item ${location.pathname === '/payment' ? 'active' : ''}`} onClick={() => { navigate("/payment"); setNavOpen(false); }}>Payments</button>
           <button className={`mobile-item ${location.pathname === '/messages' ? 'active' : ''}`} onClick={() => { navigate("/messages"); setNavOpen(false); }}>Messages</button>

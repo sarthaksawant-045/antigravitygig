@@ -1,1 +1,11 @@
-2026-03-27 20:39:37,994 - __main__ - INFO - [SOCKET] Socket.IO initialized with Flask app
+2026-04-13 16:31:07,202 - __main__ - INFO - [SOCKET] Socket.IO initialized with Flask app
+2026-04-13 16:31:08,377 - __main__ - INFO - Starting GigBridge backend server...
+2026-04-13 16:31:08,378 - __main__ - INFO - Testing database connection...
+2026-04-13 16:31:08,464 - __main__ - INFO - Database validation passed
+2026-04-13 16:31:08,735 - __main__ - INFO - Core database tables initialized
+2026-04-13 16:31:09,263 - __main__ - INFO - Admin database tables initialized
+2026-04-13 16:31:09,604 - __main__ - INFO - Database connection test passed
+2026-04-13 16:31:09,604 - __main__ - INFO - Starting Flask server on http://0.0.0.0:5000
+2026-04-13 16:31:09,607 - __main__ - INFO - Starting server with Socket.IO support
+2026-04-13 16:31:09,632 - werkzeug - WARNING -  * Debugger is active!
+2026-04-13 16:31:09,658 - werkzeug - INFO -  * Debugger PIN: 310-484-729

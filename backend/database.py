@@ -17,19 +17,16 @@ def _try_add_column(cur, table, col_def):
     try:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_def}")
     except psycopg2.errors.Error:
-        # Fallback for older PostgreSQL versions that don't support IF NOT EXISTS
+
         try:
             cur.execute(f"ALTER TABLE {table} ADD COLUMN {col_def}")
         except is_column_exists_error:
-            pass  # Column already exists, ignore
+            pass
         except Exception:
-            pass  # Other errors, ignore
-
+            pass
 
 def create_tables():
-    # ==========================
-    # CLIENT DB
-    # ==========================
+
     db = client_db()
     cur = get_dict_cursor(db)
 
@@ -42,11 +39,9 @@ def create_tables():
     )
     """)
 
-    # OAuth support (does NOT affect your existing login/signup/OTP logic)
     _try_add_column(cur, "client", "auth_provider TEXT DEFAULT 'local'")
     _try_add_column(cur, "client", "google_sub TEXT")
 
-    # Profile photo support
     _try_add_column(cur, "client", "profile_image TEXT")
 
     cur.execute("""
@@ -71,7 +66,6 @@ def create_tables():
     )
     """)
 
-    # Notifications (client side)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS notification (
         id SERIAL PRIMARY KEY ,
@@ -80,14 +74,12 @@ def create_tables():
         created_at INTEGER
     )
     """)
-    
-    # Add enhanced notification columns if they don't exist
+
     _try_add_column(cur, "notification", "title TEXT")
     _try_add_column(cur, "notification", "related_entity_type TEXT")
     _try_add_column(cur, "notification", "related_entity_id INTEGER")
     _try_add_column(cur, "notification", "is_read BOOLEAN DEFAULT FALSE")
 
-    # Unified notifications table used by the notification center
     cur.execute("""
     CREATE TABLE IF NOT EXISTS notifications (
         notification_id SERIAL PRIMARY KEY,
@@ -108,7 +100,6 @@ def create_tables():
     except Exception:
         pass
 
-    # Call session (client.db copy)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS call_session (
         id SERIAL PRIMARY KEY ,
@@ -123,7 +114,6 @@ def create_tables():
     )
     """)
 
-    # Client Notifications Table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS client_notifications (
         id SERIAL PRIMARY KEY,
@@ -137,15 +127,11 @@ def create_tables():
     )
     """)
 
-    # Add index for client_notifications
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_client_notifications_client_id ON client_notifications(client_id)")
     except Exception:
         pass
 
-    # ==========================
-    # MILESTONE TABLE
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS milestone (
         id SERIAL PRIMARY KEY,
@@ -160,9 +146,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # WORK LOG TABLE
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS work_log (
         id SERIAL PRIMARY KEY,
@@ -178,9 +161,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # INVOICE TABLE
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS invoice (
         id SERIAL PRIMARY KEY,
@@ -193,9 +173,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # CLIENT VERIFICATION
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS client_kyc (
         id SERIAL PRIMARY KEY,
@@ -212,9 +189,6 @@ def create_tables():
     db.commit()
     db.close()
 
-    # ==========================
-    # FREELANCER DB
-    # ==========================
     db = freelancer_db()
     cur = get_dict_cursor(db)
 
@@ -227,11 +201,9 @@ def create_tables():
     )
     """)
 
-    # OAuth support (does NOT affect your existing login/signup/OTP logic)
     _try_add_column(cur, "freelancer", "auth_provider TEXT DEFAULT 'local'")
     _try_add_column(cur, "freelancer", "google_sub TEXT")
 
-    # Profile photo support
     _try_add_column(cur, "freelancer", "profile_image TEXT")
     _try_add_column(cur, "freelancer", "is_premium BOOLEAN DEFAULT FALSE")
     _try_add_column(cur, "freelancer", "premium_valid_until TIMESTAMP")
@@ -267,7 +239,7 @@ def create_tables():
     _try_add_column(cur, "freelancer_profile", "fixed_price REAL")
     _try_add_column(cur, "freelancer_profile", "hourly_rate REAL")
     _try_add_column(cur, "freelancer_profile", "overtime_rate_per_hour REAL")
-    # New pricing-type aware fields
+
     _try_add_column(cur, "freelancer_profile", "pricing_type TEXT")
     _try_add_column(cur, "freelancer_profile", "per_person_rate REAL")
     _try_add_column(cur, "freelancer_profile", "starting_price REAL")
@@ -275,21 +247,20 @@ def create_tables():
     _try_add_column(cur, "freelancer_profile", "work_description TEXT")
     _try_add_column(cur, "freelancer_profile", "services_included TEXT")
 
-    # Migrate experience from INTEGER to REAL for existing records
     try:
-        # Check if experience column is still INTEGER type
+
         cur.execute("""
-            SELECT data_type 
-            FROM information_schema.columns 
-            WHERE table_name = 'freelancer_profile' 
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_name = 'freelancer_profile'
             AND column_name = 'experience'
         """)
         result = cur.fetchone()
-        
+
         if result and result[0] == 'integer':
             cur.execute("ALTER TABLE freelancer_profile ALTER COLUMN experience TYPE REAL")
     except Exception:
-        # Column might already be REAL or migration already done
+
         pass
 
     cur.execute("""
@@ -300,7 +271,6 @@ def create_tables():
     )
     """)
 
-    # Chat
     cur.execute("""
     CREATE TABLE IF NOT EXISTS conversation (
         id SERIAL PRIMARY KEY,
@@ -323,11 +293,9 @@ def create_tables():
         timestamp INTEGER
     )
     """)
-    
-    # Add conversation_id column if it doesn't exist (for existing tables)
+
     _try_add_column(cur, "message", "conversation_id INTEGER")
 
-    # Hire / Job
     cur.execute("""
     CREATE TABLE IF NOT EXISTS hire_request (
         id SERIAL PRIMARY KEY,
@@ -341,7 +309,6 @@ def create_tables():
     )
     """)
 
-    # Saved freelancers (client side)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS saved_freelancer (
         client_id INTEGER,
@@ -350,7 +317,6 @@ def create_tables():
     )
     """)
 
-    # Saved clients (freelancer side)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS saved_client (
         freelancer_id INTEGER,
@@ -359,11 +325,9 @@ def create_tables():
         UNIQUE(freelancer_id, client_id)
     )
     """)
-    
-    # Add created_at column to existing saved_client table if it doesn't exist
+
     _try_add_column(cur, "saved_client", "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
-    # Notifications (legacy copy kept in freelancer.db in your project)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS notification (
         id SERIAL PRIMARY KEY ,
@@ -373,17 +337,14 @@ def create_tables():
         created_at INTEGER
     )
     """)
-    
-    # Add freelancer_id column if it doesn't exist
+
     _try_add_column(cur, "notification", "freelancer_id INTEGER")
-    
-    # Add enhanced notification columns if they don't exist
+
     _try_add_column(cur, "notification", "title TEXT")
     _try_add_column(cur, "notification", "related_entity_type TEXT")
     _try_add_column(cur, "notification", "related_entity_id INTEGER")
     _try_add_column(cur, "notification", "is_read BOOLEAN DEFAULT FALSE")
 
-    # Portfolio
     cur.execute("""
     CREATE TABLE IF NOT EXISTS portfolio (
         id SERIAL PRIMARY KEY,
@@ -399,7 +360,6 @@ def create_tables():
     _try_add_column(cur, "portfolio", "media_url TEXT")
     _try_add_column(cur, "portfolio", "image_url TEXT")
 
-    # Call session (freelancer.db copy)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS call_session (
         id SERIAL PRIMARY KEY,
@@ -414,7 +374,6 @@ def create_tables():
     )
     """)
 
-    # Freelancer Notifications Table
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_notifications (
         id SERIAL PRIMARY KEY,
@@ -428,13 +387,11 @@ def create_tables():
     )
     """)
 
-    # Add index for freelancer_notifications
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS idx_freelancer_notifications_freelancer_id ON freelancer_notifications(freelancer_id)")
     except Exception:
         pass
 
-    # Project posting tables
     cur.execute("""
     CREATE TABLE IF NOT EXISTS project_post (
         id SERIAL PRIMARY KEY,
@@ -448,8 +405,7 @@ def create_tables():
         created_at INTEGER NOT NULL
     )
     """)
-    
-    # Ensure all required columns exist (for existing databases)
+
     _try_add_column(cur, "project_post", "title TEXT NOT NULL DEFAULT ''")
     _try_add_column(cur, "project_post", "budget_type TEXT")
     _try_add_column(cur, "project_post", "location TEXT")
@@ -464,14 +420,10 @@ def create_tables():
         created_at INTEGER
     )
     """)
-    
-    # Ensure proposal column exists (for existing databases)
+
     _try_add_column(cur, "project_application", "proposal TEXT")
     _try_add_column(cur, "project_application", "bid_amount REAL")
 
-    # ==========================
-    # FTS5: Search index (PostgreSQL doesn't have FTS5, use full-text search)
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_search (
         freelancer_id INTEGER PRIMARY KEY,
@@ -482,16 +434,12 @@ def create_tables():
         portfolio_text TEXT
     )
     """)
-    
-    # Create GIN index for full-text search
+
     try:
         cur.execute("CREATE INDEX IF NOT EXISTS freelancer_search_text_idx ON freelancer_search USING gin(to_tsvector('english', title || ' ' || skills || ' ' || bio || ' ' || tags || ' ' || portfolio_text))")
     except Exception:
         pass
 
-    # ==========================
-    # CLIENT VERIFICATION
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS client_verification (
         id SERIAL PRIMARY KEY,
@@ -505,9 +453,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # FREELANCER VERIFICATION
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_verification (
         id SERIAL PRIMARY KEY,
@@ -522,9 +467,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # FREELANCER SUBSCRIPTION
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_subscription (
         id SERIAL PRIMARY KEY,
@@ -536,9 +478,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # REVIEW TABLE
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS review (
         id SERIAL PRIMARY KEY,
@@ -551,7 +490,6 @@ def create_tables():
     )
     """)
 
-    # Add contract type columns to hire_request
     _try_add_column(cur, "hire_request", "contract_type TEXT DEFAULT 'FIXED'")
     _try_add_column(cur, "hire_request", "contract_hourly_rate REAL")
     _try_add_column(cur, "hire_request", "contract_overtime_rate REAL")
@@ -564,7 +502,7 @@ def create_tables():
     _try_add_column(cur, "hire_request", "event_date TEXT")
     _try_add_column(cur, "hire_request", "start_time TEXT")
     _try_add_column(cur, "hire_request", "end_time TEXT")
-    # Payment & event lifecycle (Razorpay + dispute extension)
+
     _try_add_column(cur, "hire_request", "payment_status TEXT DEFAULT 'pending'")
     _try_add_column(cur, "hire_request", "payout_status TEXT DEFAULT 'on_hold'")
     _try_add_column(cur, "hire_request", "event_status TEXT DEFAULT 'scheduled'")
@@ -575,14 +513,13 @@ def create_tables():
     _try_add_column(cur, "hire_request", "completion_note TEXT")
     _try_add_column(cur, "hire_request", "completion_proof TEXT")
     _try_add_column(cur, "hire_request", "completed_at INTEGER")
-    
-    # Event venue fields for job-specific location
+
     _try_add_column(cur, "hire_request", "event_address TEXT")
     _try_add_column(cur, "hire_request", "event_city TEXT")
     _try_add_column(cur, "hire_request", "event_pincode TEXT")
     _try_add_column(cur, "hire_request", "event_landmark TEXT")
     _try_add_column(cur, "hire_request", "venue_source TEXT DEFAULT 'custom'")
-    # Pricing-type and negotiation / hire-flow extensions (additive)
+
     _try_add_column(cur, "hire_request", "pricing_type TEXT")
     _try_add_column(cur, "hire_request", "selected_package_id INTEGER")
     _try_add_column(cur, "hire_request", "selected_package_name TEXT")
@@ -597,7 +534,6 @@ def create_tables():
     _try_add_column(cur, "hire_request", "guest_count INTEGER")
     _try_add_column(cur, "hire_request", "additional_requirements TEXT")
 
-    # Package records for package-based pricing categories
     cur.execute("""
     CREATE TABLE IF NOT EXISTS freelancer_package (
         id SERIAL PRIMARY KEY,
@@ -609,9 +545,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # CALLS TABLE (Voice/Video Calls)
-    # ==========================
     cur.execute("""
         CREATE TABLE IF NOT EXISTS calls (
             call_id SERIAL PRIMARY KEY,
@@ -624,9 +557,6 @@ def create_tables():
         )
     """)
 
-    # ==========================
-    # PAYMENT RECORDS (Razorpay hire & subscription)
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payment_records (
         payment_id SERIAL PRIMARY KEY,
@@ -643,9 +573,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # PAYOUT DETAILS (freelancer bank/UPI - separate from profile)
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS payout_details (
         id SERIAL PRIMARY KEY,
@@ -661,9 +588,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # DISPUTES
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS disputes (
         dispute_id SERIAL PRIMARY KEY,
@@ -679,9 +603,6 @@ def create_tables():
     )
     """)
 
-    # ==========================
-    # PROJECTS (Job Lifecycle)
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS projects (
         id SERIAL PRIMARY KEY,
@@ -704,9 +625,6 @@ def create_tables():
     _try_add_column(cur, "projects", "payment_status TEXT")
     _try_add_column(cur, "projects", "payout_status TEXT")
 
-    # ==========================
-    # TICKETS / DISPUTES
-    # ==========================
     cur.execute("""
     CREATE TABLE IF NOT EXISTS tickets (
         ticket_id SERIAL PRIMARY KEY,
@@ -730,7 +648,6 @@ def create_tables():
 
     db.commit()
 
-    # Bootstrap index once (only if empty) so existing profiles become searchable
     try:
         cur.execute("SELECT COUNT(*) FROM freelancer_search")
         cnt = int((cur.fetchone() or [0])[0] or 0)
@@ -747,11 +664,6 @@ def create_tables():
 
     db.close()
 
-
-# ============================================================
-# FTS5 rebuild helper
-# ============================================================
-
 def rebuild_freelancer_search_index(freelancer_id: int):
     """
     Rebuild search row for one freelancer_id by pulling latest profile + portfolio.
@@ -767,16 +679,16 @@ def rebuild_freelancer_search_index(freelancer_id: int):
         cur = get_dict_cursor(conn)
 
         cur.execute("""
-            SELECT 
+            SELECT
                 COALESCE(title,'') as title,
-                COALESCE(skills,'') as skills, 
-                COALESCE(bio,'') as bio, 
+                COALESCE(skills,'') as skills,
+                COALESCE(bio,'') as bio,
                 COALESCE(tags,'') as tags
             FROM freelancer_profile
             WHERE freelancer_id=%s
         """, (fid,))
         row = cur.fetchone()
-        
+
         if not row:
             cur.execute("DELETE FROM freelancer_search WHERE freelancer_id=%s", (fid,))
             conn.commit()
@@ -798,7 +710,6 @@ def rebuild_freelancer_search_index(freelancer_id: int):
         except Exception:
             portfolio_text = ""
 
-        # Replace row
         cur.execute("DELETE FROM freelancer_search WHERE freelancer_id=%s", (fid,))
         cur.execute("""
             INSERT INTO freelancer_search (freelancer_id, title, skills, bio, tags, portfolio_text)
@@ -814,18 +725,13 @@ def rebuild_freelancer_search_index(freelancer_id: int):
         conn.commit()
     except Exception as e:
         print(f"DEBUG rebuild: Exception occurred: {e}")
-        # Don't crash the app if indexing fails
+
         try:
             conn.commit()
         except Exception:
             pass
     finally:
         conn.close()
-
-
-# ============================================================
-# Existing helper getters used by llm_chatbot.py
-# ============================================================
 
 def get_latest_hire_requests_for_client(client_id: int, limit: int = 20):
     try:
@@ -878,7 +784,6 @@ def get_latest_hire_requests_for_client(client_id: int, limit: int = 20):
     finally:
         conn.close()
 
-
 def get_latest_hire_requests_for_freelancer(freelancer_id: int, limit: int = 20):
     try:
         fid = int(freelancer_id)
@@ -919,7 +824,7 @@ def get_latest_hire_requests_for_freelancer(freelancer_id: int, limit: int = 20)
                     cconn.close()
                 except Exception:
                     pass
-            
+
             if isinstance(r, dict):
                 out.append({
                     "request_id": r.get("id"),
@@ -949,7 +854,6 @@ def get_latest_hire_requests_for_freelancer(freelancer_id: int, limit: int = 20)
         return []
     finally:
         conn.close()
-
 
 def get_latest_messages_for_client(client_id: int, limit: int = 50):
     try:
@@ -992,7 +896,6 @@ def get_latest_messages_for_client(client_id: int, limit: int = 50):
     finally:
         conn.close()
 
-
 def get_latest_messages_for_freelancer(freelancer_id: int, limit: int = 50):
     try:
         fid = int(freelancer_id)
@@ -1034,7 +937,6 @@ def get_latest_messages_for_freelancer(freelancer_id: int, limit: int = 50):
     finally:
         conn.close()
 
-
 def get_latest_notifications_for_client(client_id: int, limit: int = 50):
     try:
         cid = int(client_id)
@@ -1068,7 +970,6 @@ def get_latest_notifications_for_client(client_id: int, limit: int = 50):
         return []
     finally:
         conn.close()
-
 
 def get_client_profile(client_id: int):
     try:
@@ -1119,11 +1020,6 @@ def get_client_profile(client_id: int):
     finally:
         conn.close()
 
-
-# ============================================================
-# PAYMENT-BASED JOB COMPLETION LOGIC
-# ============================================================
-
 def mark_job_completed(job_id):
     """Mark a job as completed based on successful payment"""
     if not job_id:
@@ -1132,7 +1028,6 @@ def mark_job_completed(job_id):
     conn = freelancer_db()
     cur = get_dict_cursor(conn)
 
-    # Prevent duplicate completion
     cur.execute(
         "UPDATE hire_request SET status='COMPLETED' WHERE id=%s AND status != 'COMPLETED'",
         (job_id,)
@@ -1147,14 +1042,13 @@ def mark_job_completed(job_id):
 
     return True, "Job marked as completed"
 
-
 def get_completed_project_count(freelancer_id: int):
     """Get the count of completed projects for a freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return 0
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1172,7 +1066,6 @@ def get_completed_project_count(freelancer_id: int):
         return 0
     finally:
         conn.close()
-
 
 def get_freelancer_profile(freelancer_id: int):
     try:
@@ -1195,11 +1088,9 @@ def get_freelancer_profile(freelancer_id: int):
         r = cur.fetchone()
         if not r:
             return None
-        
-        # Get completed projects count
+
         completed_projects = get_completed_project_count(fid)
-        
-        # Extract pricing fields with backward compatibility
+
         if isinstance(r, dict):
             supports_fixed = r.get("supports_fixed", True)
             supports_hourly = r.get("supports_hourly", True)
@@ -1212,10 +1103,9 @@ def get_freelancer_profile(freelancer_id: int):
             fixed_price = r[21] if len(r) > 21 else None
             hourly_rate = r[22] if len(r) > 22 else None
             overtime_rate = r[23] if len(r) > 23 else None
-        
-        # Backward compatibility: infer pricing models from existing data
+
         if supports_fixed is None and supports_hourly is None:
-            # Old record - infer from pricing fields
+
             if fixed_price is not None and hourly_rate is not None:
                 supports_fixed = True
                 supports_hourly = True
@@ -1226,27 +1116,24 @@ def get_freelancer_profile(freelancer_id: int):
                 supports_fixed = False
                 supports_hourly = True
             else:
-                # Default to both if no pricing data exists
+
                 supports_fixed = True
                 supports_hourly = True
-        
-        # Format experience from years (now stored as whole years)
+
         if isinstance(r, dict):
             experience_years = r.get("experience", 0) or 0
         else:
             experience_years = r[6] or 0
-            
-        # Since experience is now stored as whole years, display as years only
+
         experience_str = f"{int(experience_years)} years"
-        
-        # Fetch portfolio images
+
         portfolio_images = []
         try:
             cur.execute("SELECT image_path, media_url FROM portfolio WHERE freelancer_id=%s ORDER BY id DESC", (fid,))
             port_rows = cur.fetchall()
             for pr in port_rows:
                 if isinstance(pr, dict):
-                    # Local path vs URL
+
                     val = pr.get("media_url") or pr.get("image_path")
                 else:
                     val = pr[1] or pr[0]
@@ -1254,7 +1141,7 @@ def get_freelancer_profile(freelancer_id: int):
                     portfolio_images.append(val)
         except Exception:
             pass
-            
+
         if isinstance(r, dict):
             return {
                 "id": r.get("id"),
@@ -1327,18 +1214,13 @@ def get_freelancer_profile(freelancer_id: int):
     finally:
         conn.close()
 
-
-# ============================================================
-# FREELANCER VERIFICATION FUNCTIONS
-# ============================================================
-
 def get_freelancer_verification(freelancer_id: int):
     """Get verification status for a freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return None
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1367,40 +1249,38 @@ def get_freelancer_verification(freelancer_id: int):
     finally:
         conn.close()
 
-
 def update_freelancer_verification(freelancer_id: int, government_id_path: str, pan_card_path: str, artist_proof_path: str = None):
     """Update or create verification record for freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return False
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
         import time
         current_time = int(time.time())
-        
-        # Check if record exists
+
         cur.execute("SELECT id FROM freelancer_verification WHERE freelancer_id=%s", (fid,))
         existing = cur.fetchone()
-        
+
         if existing:
-            # Update existing record
+
             cur.execute("""
-                UPDATE freelancer_verification 
-                SET government_id_path=%s, pan_card_path=%s, artist_proof_path=%s, 
+                UPDATE freelancer_verification
+                SET government_id_path=%s, pan_card_path=%s, artist_proof_path=%s,
                     status='PENDING', submitted_at=%s
                 WHERE freelancer_id=%s
             """, (government_id_path, pan_card_path, artist_proof_path, current_time, fid))
         else:
-            # Create new record
+
             cur.execute("""
-                INSERT INTO freelancer_verification 
+                INSERT INTO freelancer_verification
                 (freelancer_id, government_id_path, pan_card_path, artist_proof_path, status, submitted_at)
                 VALUES (%s, %s, %s, %s, 'PENDING', %s)
             """, (fid, government_id_path, pan_card_path, artist_proof_path, current_time))
-        
+
         conn.commit()
         return True
     except Exception:
@@ -1408,17 +1288,13 @@ def update_freelancer_verification(freelancer_id: int, government_id_path: str, 
     finally:
         conn.close()
 
-
-# FREELANCER SUBSCRIPTION FUNCTIONS
-# ============================================================
-
 def get_freelancer_plan(freelancer_id: int):
     """Safely get freelancer plan, creating BASIC record if needed"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return "BASIC"
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1428,58 +1304,53 @@ def get_freelancer_plan(freelancer_id: int):
             WHERE freelancer_id=%s
         """, (fid,))
         result = cur.fetchone()
-        
+
         if result is None:
-            # No subscription record exists, create BASIC
+
             import time
             current_time = int(time.time())
             cur.execute("""
-                INSERT INTO freelancer_subscription 
+                INSERT INTO freelancer_subscription
                 (freelancer_id, plan_name, status, start_date)
                 VALUES (%s, 'BASIC', 'ACTIVE', %s)
             """, (fid, current_time))
-            
-            # Also update profile
+
             cur.execute("""
-                UPDATE freelancer_profile 
+                UPDATE freelancer_profile
                 SET current_plan='BASIC'
                 WHERE freelancer_id=%s
             """, (fid,))
-            
+
             conn.commit()
             return "BASIC"
-        
-        # Record exists, get plan safely
+
         plan_name = result[0] if isinstance(result, (tuple, list)) else result['plan_name']
-        
-        # Handle NULL plan_name
+
         if not plan_name:
             cur.execute("""
-                UPDATE freelancer_subscription 
+                UPDATE freelancer_subscription
                 SET plan_name='BASIC'
                 WHERE freelancer_id=%s
             """, (fid,))
             cur.execute("""
-                UPDATE freelancer_profile 
+                UPDATE freelancer_profile
                 SET current_plan='BASIC'
                 WHERE freelancer_id=%s
             """, (fid,))
             conn.commit()
             return "BASIC"
-        
-        # Migrate old plans
+
         if plan_name == "FREE":
             plan_name = "BASIC"
         elif plan_name == "PRO":
             plan_name = "PREMIUM"
-        
+
         return plan_name
-        
+
     except Exception:
         return "BASIC"
     finally:
         conn.close()
-
 
 def get_freelancer_subscription(freelancer_id: int):
     """Get subscription details for freelancer"""
@@ -1487,7 +1358,7 @@ def get_freelancer_subscription(freelancer_id: int):
         fid = int(freelancer_id)
     except Exception:
         return None
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1498,7 +1369,7 @@ def get_freelancer_subscription(freelancer_id: int):
         """, (fid,))
         r = cur.fetchone()
         if not r:
-            # Return default BASIC subscription
+
             return {
                 "id": None,
                 "freelancer_id": fid,
@@ -1507,14 +1378,14 @@ def get_freelancer_subscription(freelancer_id: int):
                 "end_date": None,
                 "status": "ACTIVE"
             }
-        
+
         plan_name = r.get("plan_name", r[2]) if isinstance(r, dict) else r[2]
-        # Migrate old plans
+
         if plan_name == "FREE":
             plan_name = "BASIC"
         elif plan_name == "PRO":
             plan_name = "PREMIUM"
-        
+
         return {
             "id": r.get("id", r[0]) if isinstance(r, dict) else r[0],
             "freelancer_id": r.get("freelancer_id", r[1]) if isinstance(r, dict) else r[1],
@@ -1528,39 +1399,37 @@ def get_freelancer_subscription(freelancer_id: int):
     finally:
         conn.close()
 
-
 def update_client_kyc(client_id: int, government_id_path: str, pan_card_path: str):
     """Update or create KYC record for client"""
     try:
         cid = int(client_id)
     except Exception:
         return False
-    
+
     conn = client_db()
     try:
         cur = get_dict_cursor(conn)
         import time
         current_time = int(time.time())
-        
-        # Check if record exists
+
         cur.execute("SELECT id FROM client_kyc WHERE client_id=%s", (cid,))
         existing = cur.fetchone()
-        
+
         if existing:
-            # Update existing record
+
             cur.execute("""
-                UPDATE client_kyc 
+                UPDATE client_kyc
                 SET government_id_path=%s, pan_card_path=%s, status='PENDING', submitted_at=%s
                 WHERE client_id=%s
             """, (government_id_path, pan_card_path, current_time, cid))
         else:
-            # Create new record
+
             cur.execute("""
-                INSERT INTO client_kyc 
+                INSERT INTO client_kyc
                 (client_id, government_id_path, pan_card_path, status, submitted_at)
                 VALUES (%s, %s, %s, 'PENDING', %s)
             """, (cid, government_id_path, pan_card_path, current_time))
-        
+
         conn.commit()
         return True
     except Exception:
@@ -1568,14 +1437,13 @@ def update_client_kyc(client_id: int, government_id_path: str, pan_card_path: st
     finally:
         conn.close()
 
-
 def get_client_kyc(client_id: int):
     """Get KYC status for a client"""
     try:
         cid = int(client_id)
     except Exception:
         return None
-    
+
     conn = client_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1603,7 +1471,6 @@ def get_client_kyc(client_id: int):
     finally:
         conn.close()
 
-
 def update_client_kyc_review(client_id: int, status: str, reviewed_by: int):
     """Update client KYC review status"""
     try:
@@ -1611,29 +1478,28 @@ def update_client_kyc_review(client_id: int, status: str, reviewed_by: int):
         reviewer_id = int(reviewed_by)
     except Exception:
         return False
-    
+
     if status not in ('APPROVED', 'REJECTED'):
         return False
-    
+
     conn = client_db()
     try:
         cur = get_dict_cursor(conn)
         import time
         current_time = int(time.time())
-        
+
         cur.execute("""
-            UPDATE client_kyc 
+            UPDATE client_kyc
             SET status=%s, reviewed_at=%s, reviewed_by=%s
             WHERE client_id=%s
         """, (status, current_time, reviewer_id, cid))
-        
+
         conn.commit()
         return True
     except Exception:
         return False
     finally:
         conn.close()
-
 
 def get_pending_client_kyc():
     """Get all pending client KYC submissions"""
@@ -1667,14 +1533,13 @@ def get_pending_client_kyc():
     finally:
         conn.close()
 
-
 def update_freelancer_subscription(freelancer_id: int, plan_name: str, days: int = 30):
     """Update or create subscription record for freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return False
-    
+
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1682,55 +1547,45 @@ def update_freelancer_subscription(freelancer_id: int, plan_name: str, days: int
         current_time = int(time.time())
         end_time = current_time + (days * 24 * 60 * 60)
         premium_valid_until = datetime.utcfromtimestamp(end_time) if plan_name in ["PRO", "PREMIUM"] else None
-        
-        # Check if record exists
+
         cur.execute("SELECT id FROM freelancer_subscription WHERE freelancer_id=%s", (fid,))
         existing = cur.fetchone()
-        
+
         if existing:
-            # Update existing record
             cur.execute("""
-                UPDATE freelancer_subscription 
+                UPDATE freelancer_subscription
                 SET plan_name=%s, start_date=%s, end_date=%s, status='ACTIVE'
                 WHERE freelancer_id=%s
             """, (plan_name, current_time, end_time, fid))
         else:
-            # Create new record
             cur.execute("""
-                INSERT INTO freelancer_subscription 
+                INSERT INTO freelancer_subscription
                 (freelancer_id, plan_name, start_date, end_date, status)
                 VALUES (%s, %s, %s, %s, 'ACTIVE')
             """, (fid, plan_name, current_time, end_time))
-        
-        # Update profile
         cur.execute("""
-            UPDATE freelancer_profile 
+            UPDATE freelancer_profile
             SET current_plan=%s
             WHERE freelancer_id=%s
         """, (plan_name, fid))
-
         cur.execute("""
             UPDATE freelancer
             SET is_premium=%s, premium_valid_until=%s
             WHERE id=%s
         """, (plan_name in ["PRO", "PREMIUM"], premium_valid_until, fid))
-        
-        # Reset job applies for paid plans
         if plan_name in ["PRO", "PREMIUM"]:
             cur.execute("""
-                UPDATE freelancer_profile 
+                UPDATE freelancer_profile
                 SET job_applies_used=0
                 WHERE freelancer_id=%s
             """, (fid,))
-        
+
         conn.commit()
         return True
     except Exception:
         return False
     finally:
         conn.close()
-
-
 def activate_freelancer_premium_subscription(freelancer_id: int, days: int = 90):
     """Activate PREMIUM for a fixed number of days and return the updated user object."""
     try:
@@ -1742,13 +1597,11 @@ def activate_freelancer_premium_subscription(freelancer_id: int, days: int = 90)
     valid_until_dt = current_dt + timedelta(days=days)
     start_ts = int(current_dt.timestamp())
     end_ts = int(valid_until_dt.timestamp())
-
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
         cur.execute("SELECT id FROM freelancer_subscription WHERE freelancer_id=%s", (fid,))
         existing = cur.fetchone()
-
         if existing:
             cur.execute("""
                 UPDATE freelancer_subscription
@@ -1761,7 +1614,6 @@ def activate_freelancer_premium_subscription(freelancer_id: int, days: int = 90)
                 (freelancer_id, plan_name, start_date, end_date, status)
                 VALUES (%s, 'PREMIUM', %s, %s, 'ACTIVE')
             """, (fid, start_ts, end_ts))
-
         cur.execute("""
             UPDATE freelancer_profile
             SET current_plan='PREMIUM', job_applies_used=0
@@ -1786,15 +1638,12 @@ def activate_freelancer_premium_subscription(freelancer_id: int, days: int = 90)
         return None
     finally:
         conn.close()
-
-
 def get_freelancer_job_applies(freelancer_id: int):
     """Get job applies count and limits for freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return None
-    
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
@@ -1806,29 +1655,23 @@ def get_freelancer_job_applies(freelancer_id: int):
         r = cur.fetchone()
         if not r:
             return None
-        
         current_plan = r[0] or "BASIC"
         applies_used = r[1] or 0
         reset_date = r[2]
-        
-        # Reset monthly counter if needed
         import time
         current_time = int(time.time())
         if reset_date and current_time > reset_date:
             applies_used = 0
             cur.execute("""
-                UPDATE freelancer_profile 
+                UPDATE freelancer_profile
                 SET job_applies_used=0, job_applies_reset_date=%s
                 WHERE freelancer_id=%s
             """, (current_time + (30 * 24 * 60 * 60), fid))
             conn.commit()
-        
-        # Get limits
         if current_plan == "BASIC":
             limit = 10
         else:
-            limit = float('inf')  # Unlimited for PREMIUM
-        
+            limit = float('inf')
         return {
             "current_plan": current_plan,
             "applies_used": applies_used,
@@ -1839,20 +1682,17 @@ def get_freelancer_job_applies(freelancer_id: int):
         return None
     finally:
         conn.close()
-
-
 def increment_job_applies(freelancer_id: int):
     """Increment job applies count for freelancer"""
     try:
         fid = int(freelancer_id)
     except Exception:
         return False
-    
     conn = freelancer_db()
     try:
         cur = get_dict_cursor(conn)
         cur.execute("""
-            UPDATE freelancer_profile 
+            UPDATE freelancer_profile
             SET job_applies_used = job_applies_used + 1
             WHERE freelancer_id=%s
         """, (fid,))
@@ -1862,8 +1702,6 @@ def increment_job_applies(freelancer_id: int):
         return False
     finally:
         conn.close()
-
-
 def check_subscription_expiry():
     """Check and update expired subscriptions"""
     conn = freelancer_db()
@@ -1871,27 +1709,21 @@ def check_subscription_expiry():
         cur = get_dict_cursor(conn)
         import time
         current_time = int(time.time())
-        
-        # Find expired subscriptions
         cur.execute("""
-            SELECT freelancer_id 
-            FROM freelancer_subscription 
+            SELECT freelancer_id
+            FROM freelancer_subscription
             WHERE end_date < %s AND plan_name != 'BASIC'
         """, (current_time,))
         expired = cur.fetchall()
-        
         for fid in expired:
             freelancer_id = fid[0]
-            # Reset to BASIC
             cur.execute("""
-                UPDATE freelancer_subscription 
+                UPDATE freelancer_subscription
                 SET plan_name='BASIC', status='ACTIVE', start_date=NULL, end_date=NULL
                 WHERE freelancer_id=%s
             """, (freelancer_id,))
-            
-            # Update profile
             cur.execute("""
-                UPDATE freelancer_profile 
+                UPDATE freelancer_profile
                 SET current_plan='BASIC', job_applies_used=0
                 WHERE freelancer_id=%s
             """, (freelancer_id,))
@@ -1900,14 +1732,12 @@ def check_subscription_expiry():
                 SET is_premium=FALSE, premium_valid_until=NULL
                 WHERE id=%s
             """, (freelancer_id,))
-        
         conn.commit()
         return len(expired)
     except Exception:
         return 0
     finally:
         conn.close()
-
 if __name__ == "__main__":
     create_tables()
     print("Database tables created/updated successfully.")

@@ -57,7 +57,6 @@ import AdminPayments from "./pages/admin/AdminPayments.jsx";
 import AdminEmailLogs from "./pages/admin/AdminEmailLogs.jsx";
 import AdminDisputeCenter from "./pages/admin/AdminDisputeCenter.jsx";
 import { Briefcase, Palette, Star } from "lucide-react";
-
 function formatCompactNumber(value) {
   const numeric = Number(value || 0);
   if (numeric >= 1000) {
@@ -67,7 +66,6 @@ function formatCompactNumber(value) {
   }
   return `${Math.round(numeric)}+`;
 }
-
 const StatsStrip = () => {
   const fallbackStats = {
     artists: 500,
@@ -83,7 +81,6 @@ const StatsStrip = () => {
 
   useEffect(() => {
     let isMounted = true;
-
     publicService.getPlatformStats()
       .then((response) => {
         if (!isMounted) return;
@@ -102,12 +99,10 @@ const StatsStrip = () => {
         if (!isMounted) return;
         setLoading(false);
       });
-
     return () => {
       isMounted = false;
     };
   }, []);
-
   const statItems = [
     {
       key: "artists",
@@ -131,13 +126,11 @@ const StatsStrip = () => {
       accent: "Consistent quality from a verified artist network",
     },
   ];
-
   return (
     <section className="stats home-stats">
       <div className="stats-inner home-stats-inner">
         {statItems.map((item, index) => {
           const Icon = item.icon;
-
           return (
             <article
               key={item.key}
@@ -160,15 +153,12 @@ const StatsStrip = () => {
     </section>
   );
 };
-
 const AppContent = () => {
   const location = useLocation();
   const isArtistDashboard =
     location.pathname.startsWith("/artist/") ||
     location.pathname === "/dashboard";
-
   const isAdminRoute = location.pathname.startsWith("/admin");
-
   return (
     <>
       {!isAdminRoute && <Navbar />}
@@ -178,7 +168,6 @@ const AppContent = () => {
         <Route path="/login/:role" element={<PublicRoute><AuthLogin /></PublicRoute>} />
         <Route path="/forgot-password/:role" element={<ForgotPassword />} />
         <Route path="/auth/callback" element={<GoogleAuthCallback />} />
-
         <Route path="/client/profile-setup" element={
           <ProtectedClientRoute requireCompleted={false}><ClientProfileSetup /></ProtectedClientRoute>
         } />
@@ -191,7 +180,6 @@ const AppContent = () => {
         <Route path="/freelancer/create-profile/step-2" element={
           <ProtectedFreelancerRoute requireCompleted={false}><FreelancerProfileStep2 /></ProtectedFreelancerRoute>
         } />
-
         <Route path="/onboarding" element={
           <ProtectedClientRoute><Onboarding /></ProtectedClientRoute>
         } />
@@ -266,7 +254,6 @@ const AppContent = () => {
         <Route path="/project/:id/applicants" element={
           <ProtectedClientRoute><ViewApplicants /></ProtectedClientRoute>
         } />
-
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/clients" element={<AdminClients />} />
@@ -278,30 +265,24 @@ const AppContent = () => {
         <Route path="/admin/payments" element={<AdminPayments />} />
         <Route path="/admin/tickets" element={<AdminDisputeCenter />} />
         <Route path="/admin/email-logs" element={<AdminEmailLogs />} />
-
         <Route path="*" element={<><Hero /><StatsStrip /></>} />
       </Routes>
     </>
   );
 };
-
 export default function App() {
   const [appReady, setAppReady] = useState(false);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setAppReady(true);
     }, 350);
-
     return () => {
       window.clearTimeout(timer);
     };
   }, []);
-
   if (!appReady) {
     return <GlobalLoader message="Loading GigBridge..." />;
   }
-
   return (
     <AuthProvider>
       <GlobalCallHandler />

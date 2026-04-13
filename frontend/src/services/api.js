@@ -1,4 +1,4 @@
-import { API_BASE_URL, getApiConnectionHelp } from '../config/runtime';
+const API_BASE_URL = "https://antigravitygig-2.onrender.com";
 
 class ApiError extends Error {
   constructor(message, status, data) {
