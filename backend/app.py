@@ -390,6 +390,9 @@ except ValueError:
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
 EMAIL_LOGO_URL = os.getenv("EMAIL_LOGO_URL", f"{FRONTEND_BASE_URL}/assets/gigbridgelogo.png")
 
+# Resend HTTP API (used on Render where SMTP is blocked)
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
+
 OTP_TTL_SECONDS = 5 * 60  # 5 minutes
 
 # ============================================================
@@ -1132,14 +1135,37 @@ def build_branded_email_html(subject, body):
     </html>
     """
 
-def send_email(to_email, subject, body, related_project_id=None, html_body=None):
-    if not SENDER_EMAIL or not APP_PASSWORD:
-        err = f"Email credentials missing: SENDER_EMAIL={'SET' if SENDER_EMAIL else 'EMPTY'}, APP_PASSWORD={'SET' if APP_PASSWORD else 'EMPTY'}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+def _send_via_resend(to_email, subject, body, html_body=None):
+    """Send email via Resend HTTP API (works on Render where SMTP is blocked)."""
+    final_html = html_body or build_branded_email_html(subject, body)
+    payload = {
+        "from": f"GigBridge <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": subject,
+        "html": final_html,
+        "text": body,
+    }
+    # Add reply-to so replies go to the real email
+    if SENDER_EMAIL:
+        payload["reply_to"] = SENDER_EMAIL
 
+    resp = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=15,
+    )
+    if resp.status_code in (200, 201):
+        return True, None
+    else:
+        return False, f"Resend API error {resp.status_code}: {resp.text}"
+
+
+def _send_via_smtp(to_email, subject, body, html_body=None):
+    """Send email via SMTP (works locally, blocked on Render free tier)."""
     msg = EmailMessage()
     msg["From"] = SENDER_EMAIL
     msg["To"] = to_email
@@ -1149,64 +1175,64 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
 
     server = None
     try:
-        logger.info(f"[EMAIL] Connecting to {SMTP_HOST} as {SENDER_EMAIL}")
-        # Force IPv4 to avoid 'Network is unreachable' on cloud platforms (Render)
         smtp_ip = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)[0][4][0]
-        logger.info(f"[EMAIL] Resolved {SMTP_HOST} -> {smtp_ip} (IPv4)")
-        
-        # Try SSL on port 465 first (Render free tier blocks port 587)
-        # Then fall back to STARTTLS on port 587
-        connected = False
-        last_err = None
         for port, use_ssl in [(465, True), (SMTP_PORT, False)]:
             try:
-                logger.info(f"[EMAIL] Trying port {port} ({'SSL' if use_ssl else 'STARTTLS'})...")
                 if use_ssl:
                     server = smtplib.SMTP_SSL(smtp_ip, port, timeout=15)
                 else:
                     server = smtplib.SMTP(smtp_ip, port, timeout=15)
                     server.starttls()
                 server.login(SENDER_EMAIL, APP_PASSWORD)
-                connected = True
-                logger.info(f"[EMAIL] Connected on port {port}")
-                break
+                server.send_message(msg)
+                return True, None
             except Exception as port_err:
-                last_err = port_err
-                logger.warning(f"[EMAIL] Port {port} failed: {type(port_err).__name__}: {port_err}")
                 if server:
                     try: server.quit()
                     except: pass
                     server = None
                 continue
-        
-        if not connected:
-            err = f"All SMTP ports failed. Last error: {type(last_err).__name__}: {last_err}"
-            logger.error(err)
-            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-            return False, err
-        
-        server.send_message(msg)
-        log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
-        logger.info(f"[EMAIL] Sent to {to_email}")
-        return True, None
+        return False, "All SMTP ports timed out (Render blocks outbound SMTP)"
     except smtplib.SMTPAuthenticationError as e:
-        err = f"Gmail auth failed (bad App Password?): {e}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+        return False, f"Gmail auth failed: {e}"
     except Exception as e:
-        err = f"Email failed: {type(e).__name__}: {e}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+        return False, f"SMTP failed: {type(e).__name__}: {e}"
     finally:
         if server:
-            try:
-                server.quit()
-            except:
-                pass
+            try: server.quit()
+            except: pass
+
+
+def send_email(to_email, subject, body, related_project_id=None, html_body=None):
+    # Try Resend HTTP API first (works on Render free tier)
+    if RESEND_API_KEY:
+        logger.info(f"[EMAIL] Sending via Resend API to {to_email}")
+        success, err = _send_via_resend(to_email, subject, body, html_body)
+        if success:
+            log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
+            logger.info(f"[EMAIL] ✅ Sent via Resend to {to_email}")
+            return True, None
+        else:
+            logger.error(f"[EMAIL] Resend failed: {err}")
+            # Fall through to SMTP
+
+    # Fall back to SMTP (works locally)
+    if SENDER_EMAIL and APP_PASSWORD:
+        logger.info(f"[EMAIL] Sending via SMTP to {to_email}")
+        success, err = _send_via_smtp(to_email, subject, body, html_body)
+        if success:
+            log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
+            logger.info(f"[EMAIL] ✅ Sent via SMTP to {to_email}")
+            return True, None
+        else:
+            logger.error(f"[EMAIL] SMTP failed: {err}")
+            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+            return False, err
+
+    err = f"No email transport available: RESEND_API_KEY={'SET' if RESEND_API_KEY else 'EMPTY'}, SENDER_EMAIL={'SET' if SENDER_EMAIL else 'EMPTY'}"
+    logger.error(err)
+    log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+    return False, err
 
 def send_login_email(to_email, name, role, action):
     result, _err = send_email(
