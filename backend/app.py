@@ -174,6 +174,17 @@ from semantic_search import load_or_build, semantic_search, upsert_freelancer
 from filters_service import fetch_filtered_freelancers
 from database import create_tables, rebuild_freelancer_search_index, get_freelancer_verification, update_freelancer_verification, get_freelancer_subscription, update_freelancer_subscription, get_freelancer_job_applies, increment_job_applies, check_subscription_expiry, get_freelancer_plan
 from categories import get_pricing_type_for_category, is_valid_category
+
+@app.route("/", methods=["GET"])
+@app.route("/health", methods=["GET"])
+@app.route("/ping", methods=["GET"])
+def health_check():
+    """Simple uptime endpoint for Render and external monitors."""
+    return jsonify({
+        "success": True,
+        "msg": "GigBridge backend is running",
+        "service": "antigravitygig-backend",
+    }), 200
 @app.route("/api/public/platform-stats", methods=["GET"])
 def public_platform_stats():
     try:
