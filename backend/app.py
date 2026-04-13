@@ -185,6 +185,20 @@ def health_check():
         "msg": "GigBridge backend is running",
         "service": "antigravitygig-backend",
     }), 200
+
+@app.route("/debug/email-config", methods=["GET"])
+def debug_email_config():
+    """Temporary debug endpoint to verify email env vars are loaded."""
+    return jsonify({
+        "SENDER_EMAIL": (SENDER_EMAIL[:3] + "***") if SENDER_EMAIL else "EMPTY",
+        "APP_PASSWORD_LENGTH": len(APP_PASSWORD) if APP_PASSWORD else 0,
+        "SMTP_HOST": SMTP_HOST,
+        "SMTP_PORT": SMTP_PORT,
+        "GOOGLE_CLIENT_ID": (GOOGLE_CLIENT_ID[:10] + "***") if GOOGLE_CLIENT_ID else "EMPTY",
+        "GOOGLE_REDIRECT_URI": EXPLICIT_GOOGLE_REDIRECT_URI or "NOT SET (auto-detect)",
+        "BACKEND_URL": BACKEND_URL or "NOT SET",
+        "FRONTEND_BASE_URL": FRONTEND_BASE_URL,
+    })
 @app.route("/api/public/platform-stats", methods=["GET"])
 def public_platform_stats():
     try:
@@ -1119,9 +1133,11 @@ def build_branded_email_html(subject, body):
 
 def send_email(to_email, subject, body, related_project_id=None, html_body=None):
     if not SENDER_EMAIL or not APP_PASSWORD:
-        print("❌ Email credentials missing. Logging to DB as Failed.")
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg="Credentials missing")
-        return False
+        err = f"Email credentials missing: SENDER_EMAIL={'SET' if SENDER_EMAIL else 'EMPTY'}, APP_PASSWORD={'SET' if APP_PASSWORD else 'EMPTY'}"
+        print(f"❌ {err}")
+        logger.error(err)
+        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+        return False, err
 
     msg = EmailMessage()
     msg["From"] = SENDER_EMAIL
@@ -1132,16 +1148,26 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
 
     server = None
     try:
+        logger.info(f"[EMAIL] Connecting to {SMTP_HOST}:{SMTP_PORT} as {SENDER_EMAIL}")
         server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30)
         server.starttls()
         server.login(SENDER_EMAIL, APP_PASSWORD)
         server.send_message(msg)
         log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
-        return True
+        logger.info(f"[EMAIL] Sent to {to_email}")
+        return True, None
+    except smtplib.SMTPAuthenticationError as e:
+        err = f"Gmail auth failed (bad App Password?): {e}"
+        print(f"❌ {err}")
+        logger.error(err)
+        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+        return False, err
     except Exception as e:
-        print(f"❌ Email failed: {e}")
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=str(e))
-        return False
+        err = f"Email failed: {type(e).__name__}: {e}"
+        print(f"❌ {err}")
+        logger.error(err)
+        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+        return False, err
     finally:
         if server:
             try:
@@ -1150,7 +1176,7 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
                 pass
 
 def send_login_email(to_email, name, role, action):
-    send_email(
+    result, _err = send_email(
         to_email,
         "🎉 GigBridge Login Successful",
         f"""
@@ -1161,9 +1187,10 @@ Your {action} as a {role} on GigBridge was successful ✅
 Welcome to GigBridge 🚀
 """
     )
+    return result
 
 def send_otp_email(to_email, otp):
-    send_email(
+    return send_email(
         to_email,
         "🔐 GigBridge OTP Verification",
         f"""
@@ -1250,7 +1277,7 @@ def client_send_otp():
             if conn:
                 conn.close()
 
-        email_sent = send_otp_email(email, otp)
+        email_sent, email_error = send_otp_email(email, otp)
         if not email_sent:
             cleanup_conn = None
             try:
@@ -1267,7 +1294,7 @@ def client_send_otp():
 
             return jsonify({
                 "success": False,
-                "msg": "Failed to send OTP email. Please check email settings and try again."
+                "msg": f"Failed to send OTP email: {email_error}"
             }), 500
 
         return jsonify({"success": True, "msg": "OTP sent"})
@@ -1410,7 +1437,7 @@ def freelancer_send_otp():
         if conn:
             conn.close()
 
-    email_sent = send_otp_email(email, otp)
+    email_sent, email_error = send_otp_email(email, otp)
     if not email_sent:
         cleanup_conn = None
         try:
@@ -1427,7 +1454,7 @@ def freelancer_send_otp():
 
         return jsonify({
             "success": False,
-            "msg": "Failed to send OTP email. Please check email settings and try again."
+            "msg": f"Failed to send OTP email: {email_error}"
         }), 500
 
     return jsonify({"success": True, "msg": "OTP sent"})
