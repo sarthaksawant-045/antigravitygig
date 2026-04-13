@@ -35,7 +35,7 @@ import logging
 from flask_cors import CORS
 app = Flask(__name__)
 
-CORS(app, origins=["https://giggbridge.netlify.app"])
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -177,14 +177,9 @@ app.config["JSON_AS_ASCII"] = False
 app.config["JSONIFY_MIMETYPE"] = "application/json"
 if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
     app.json.ensure_ascii = False
-# Configure CORS - support local dev and optional production frontend URL
-allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url:
-    allowed_origins.append(frontend_url)
 CORS(
     app,
-    resources={r"/*": {"origins": allowed_origins}},
+    resources={r"/*": {"origins": "*"}},
     supports_credentials=True,
 )
 @app.route("/api/public/platform-stats", methods=["GET"])
@@ -368,10 +363,9 @@ APP_PASSWORD = (
     or os.getenv("EMAIL_PASSWORD")
     or ""
 ).strip()
-=======
 SENDER_EMAIL = os.getenv("GIGBRIDGE_SENDER_EMAIL", "gigbridgee@gmail.com")
 APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
->>>>>>> 4e9b5fc (updated API base URL)
+
 
 SMTP_HOST = (os.getenv("EMAIL_HOST") or "smtp.gmail.com").strip()
 try:
