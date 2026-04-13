@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { freelancerService } from "../services";
 import { useFavorites } from "../hooks/useFavorites";
 import socketService from '../services/socketService';
+import { buildApiUrl } from "../config/runtime";
 
 const VALID_CATEGORIES = [
   "Photographer","Videographer","DJ","Singer","Dancer","Anchor",
@@ -117,7 +118,7 @@ export default function BrowseArtists() {
       // The second request is 'fetch' for the created conversation json... wait! 
       // I am just modifying fetch options for formatting but I need to make sure the curly brace matches!
       // Here I am just preserving the fetch block for conversations:
-      const convResponse = await fetch('https://antigravitygig-2.onrender.com/conversations', {
+      const convResponse = await fetch(buildApiUrl('/conversations'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ export default function BrowseArtists() {
       console.log('[BROWSE] Conversation ID:', conversationId);
 
       // Step 2: Send message using unified message API
-      const apiUrl = 'https://antigravitygig-2.onrender.com/message/send';
+      const apiUrl = buildApiUrl('/message/send');
       
       const payload = {
         conversation_id: conversationId,

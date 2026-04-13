@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getBrandLogoUrl } from "../utils/branding.js";
+import { API_BASE_URL } from "../config/runtime";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://antigravitygig-2.onrender.com";
 const RAZORPAY_SCRIPT_ID = "razorpay-checkout-script";
 
 function formatExpiryDate(value) {

@@ -4,9 +4,8 @@ import DashboardSidebar from '../components/DashboardSidebar';
 import { Star, Crown, Check, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getBrandLogoUrl } from '../utils/branding.js';
+import { API_BASE_URL } from '../config/runtime';
 import './subscription.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
 
 const SubscriptionPage = () => {
   const [activeSidebar, setActiveSidebar] = useState('subscription');

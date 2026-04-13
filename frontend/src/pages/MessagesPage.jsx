@@ -7,6 +7,7 @@ import VoiceCallModal from '../components/VoiceCallModal';
 import VideoCallModal from '../components/VideoCallModal';
 import { useAuth } from '../context/AuthContext';
 import socketService from '../services/socketService';
+import { buildApiUrl } from '../config/runtime';
 import './dashboard.css';
 import './messages.css';
 
@@ -106,7 +107,7 @@ export default function MessagesPage() {
 
       try {
         console.log('[MSG] Fetching conversations for user:', user.id);
-        const response = await fetch(`https://antigravitygig-2.onrender.com/conversation/${user.id}?role=freelancer`);
+        const response = await fetch(buildApiUrl(`/conversation/${user.id}?role=freelancer`));
         const data = await response.json();
         
         if (response.ok) {
@@ -147,7 +148,7 @@ export default function MessagesPage() {
     const pollInterval = setInterval(async () => {
       try {
         if (!selectedConv?.conversation_id) return;
-        const response = await fetch(`https://antigravitygig-2.onrender.com/message/${selectedConv.conversation_id}`);
+        const response = await fetch(buildApiUrl(`/message/${selectedConv.conversation_id}`));
         const data = await response.json();
         
         if (response.ok && data.success) {
@@ -191,7 +192,7 @@ export default function MessagesPage() {
       console.log('[MSG] Fetching messages for conversation:', conversationKey);
       const conv = conversations.find(c => c.id === conversationKey.toString() || c.id === conversationKey);
       if (!conv || !conv.conversation_id) return;
-      const response = await fetch(`https://antigravitygig-2.onrender.com/message/${conv.conversation_id}`);
+      const response = await fetch(buildApiUrl(`/message/${conv.conversation_id}`));
       const data = await response.json();
       
       if (response.ok && data.success) {
@@ -278,7 +279,7 @@ export default function MessagesPage() {
     // Fallback to HTTP
     try {
       console.log('[MSG] Sending message via HTTP fallback');
-      const response = await fetch('https://antigravitygig-2.onrender.com/message/send', {
+      const response = await fetch(buildApiUrl('/message/send'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -323,7 +324,7 @@ export default function MessagesPage() {
     // Fallback to HTTP
     try {
       console.log('[CALL] Starting voice call via HTTP fallback');
-      const response = await fetch('https://antigravitygig-2.onrender.com/call/start', {
+      const response = await fetch(buildApiUrl('/call/start'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -367,7 +368,7 @@ export default function MessagesPage() {
     // Fallback to HTTP
     try {
       console.log('[VIDEO] Starting video call via HTTP fallback');
-      const response = await fetch('https://antigravitygig-2.onrender.com/call/start', {
+      const response = await fetch(buildApiUrl('/call/start'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

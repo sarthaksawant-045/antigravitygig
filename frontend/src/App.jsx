@@ -272,6 +272,13 @@ const AppContent = () => {
 };
 export default function App() {
   const [appReady, setAppReady] = useState(false);
+
+  useEffect(() => {
+    publicService.testBackendConnection().catch(() => {
+      // Errors are logged inside the test helper for temporary diagnostics.
+    });
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setAppReady(true);

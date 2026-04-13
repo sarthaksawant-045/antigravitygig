@@ -1,5 +1,6 @@
+import { API_BASE_URL } from '../config/runtime';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
+const API_URL = API_BASE_URL;
 
 const getAdminToken = () => localStorage.getItem('admin_token');
 

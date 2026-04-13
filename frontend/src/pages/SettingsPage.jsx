@@ -3,6 +3,7 @@ import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import { User, Lock, Bell, Shield, Eye, EyeOff, Mail, Phone, Globe, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { buildApiUrl } from '../config/runtime';
 import './settings.css';
 
 const SettingsPage = () => {
@@ -42,7 +43,7 @@ const SettingsPage = () => {
       }
 
       try {
-        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`);
+        const response = await fetch(buildApiUrl(`/freelancer/profile/${user.id}`));
         const data = await response.json();
         
         if (data.success) {
@@ -88,7 +89,7 @@ const SettingsPage = () => {
 
       // Update freelancer profile
       if (user.isAuthenticated && user.id) {
-        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`, {
+        const response = await fetch(buildApiUrl(`/freelancer/profile/${user.id}`), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

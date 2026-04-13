@@ -2,6 +2,7 @@
  * Real-time WebSocket service for messaging and calls
  */
 import { io } from 'socket.io-client';
+import { SOCKET_BASE_URL } from '../config/runtime';
 
 class SocketService {
   constructor() {
@@ -27,7 +28,7 @@ class SocketService {
     return new Promise((resolve, reject) => {
       console.log(`[SOCKET] Connecting to server as ${userRole} ${userId}...`);
       
-      const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL || 'https://antigravitygig-2.onrender.com';
+      const socketUrl = SOCKET_BASE_URL;
       this.socket = io(socketUrl, {
         transports: ['websocket', 'polling'],
         timeout: 60000,

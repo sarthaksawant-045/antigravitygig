@@ -1,4 +1,4 @@
-const API_BASE_URL = "https://antigravitygig-2.onrender.com";
+import { API_BASE_URL } from "../config/runtime";
 
 class ApiError extends Error {
   constructor(message, status, data) {

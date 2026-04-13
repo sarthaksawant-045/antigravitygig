@@ -10,6 +10,7 @@ import EditProfileModal from "../components/EditProfileModal";
 import FreelancerProfile from "../components/FreelancerProfile";
 import { freelancerService } from "../services/freelancerService";
 import { useAuth } from "../context/AuthContext.jsx";
+import { buildApiUrl } from "../config/runtime";
 import "./dashboard.css";
 import "./freelancerProfile.css";
 
@@ -39,7 +40,7 @@ export default function FreelancerProfilePage() {
       }
 
       try {
-        const response = await fetch(`https://antigravitygig-2.onrender.com/freelancer/profile/${user.id}`);
+        const response = await fetch(buildApiUrl(`/freelancer/profile/${user.id}`));
         const data = await response.json();
         
         if (data.success) {
