@@ -31,11 +31,14 @@ from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
 from ticket_routes import ticket_bp
 import logging
-<<<<<<< HEAD
 from flask_cors import CORS
 app = Flask(__name__)
+app.config["JSON_AS_ASCII"] = False
+app.config["JSONIFY_MIMETYPE"] = "application/json"
+if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
+    app.json.ensure_ascii = False
 
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -171,17 +174,6 @@ from semantic_search import load_or_build, semantic_search, upsert_freelancer
 from filters_service import fetch_filtered_freelancers
 from database import create_tables, rebuild_freelancer_search_index, get_freelancer_verification, update_freelancer_verification, get_freelancer_subscription, update_freelancer_subscription, get_freelancer_job_applies, increment_job_applies, check_subscription_expiry, get_freelancer_plan
 from categories import get_pricing_type_for_category, is_valid_category
-from flask_cors import CORS
-app = Flask(__name__)
-app.config["JSON_AS_ASCII"] = False
-app.config["JSONIFY_MIMETYPE"] = "application/json"
-if hasattr(app, "json") and hasattr(app.json, "ensure_ascii"):
-    app.json.ensure_ascii = False
-CORS(
-    app,
-    resources={r"/*": {"origins": "*"}},
-    supports_credentials=True,
-)
 @app.route("/api/public/platform-stats", methods=["GET"])
 def public_platform_stats():
     try:
@@ -342,7 +334,6 @@ def init_semantic_search():
         import logging
         logging.getLogger(__name__).warning(f"Semantic index not loaded: {_e}")
 
-<<<<<<< HEAD
 # init_semantic_search() # Called later in main thread or main block
 
 # ============================================================
