@@ -192,7 +192,8 @@ def debug_email_config():
     """Temporary debug endpoint to verify email env vars are loaded."""
     return jsonify({
         "BREVO_API_KEY": ("SET (" + str(len(BREVO_API_KEY)) + " chars)") if BREVO_API_KEY else "EMPTY",
-        "RESEND_API_KEY": ("SET (" + str(len(RESEND_API_KEY)) + " chars)") if RESEND_API_KEY else "EMPTY",
+        "BREVO_FROM_EMAIL": BREVO_FROM_EMAIL,
+        "BREVO_FROM_NAME": BREVO_FROM_NAME,
         "SENDER_EMAIL": (SENDER_EMAIL[:3] + "***") if SENDER_EMAIL else "EMPTY",
         "APP_PASSWORD_LENGTH": len(APP_PASSWORD) if APP_PASSWORD else 0,
         "SMTP_HOST": SMTP_HOST,
@@ -389,7 +390,14 @@ try:
     SMTP_PORT = int(os.getenv("EMAIL_PORT") or "587")
 except ValueError:
     SMTP_PORT = 587
+
+# ── Brevo HTTP API (primary transport on Render) ──
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "").strip()
+BREVO_FROM_EMAIL = os.getenv("BREVO_FROM_EMAIL", "gigbridgee@gmail.com").strip()
+BREVO_FROM_NAME = os.getenv("BREVO_FROM_NAME", "GigBridge").strip()
+
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+
 EMAIL_LOGO_URL = os.getenv("EMAIL_LOGO_URL", f"{FRONTEND_BASE_URL}/assets/gigbridgelogo.png")
 
 OTP_TTL_SECONDS = 5 * 60  # 5 minutes
@@ -1134,14 +1142,34 @@ def build_branded_email_html(subject, body):
     </html>
     """
 
-def send_email(to_email, subject, body, related_project_id=None, html_body=None):
-    if not SENDER_EMAIL or not APP_PASSWORD:
-        err = f"Email credentials missing: SENDER_EMAIL={'SET' if SENDER_EMAIL else 'EMPTY'}, APP_PASSWORD={'SET' if APP_PASSWORD else 'EMPTY'}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+def _send_email_brevo(to_email, subject, body, html_body=None):
+    """Send email via Brevo HTTP API (works on Render which blocks SMTP)."""
+    html_content = html_body or build_branded_email_html(subject, body)
+    payload = {
+        "sender": {"name": BREVO_FROM_NAME, "email": BREVO_FROM_EMAIL},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html_content,
+        "textContent": body,
+    }
+    resp = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "api-key": BREVO_API_KEY,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        json=payload,
+        timeout=15,
+    )
+    if resp.status_code in (200, 201):
+        return True, None
+    else:
+        return False, f"Brevo API error {resp.status_code}: {resp.text}"
 
+
+def _send_email_smtp(to_email, subject, body, html_body=None):
+    """Send email via SMTP (for local development)."""
     msg = EmailMessage()
     msg["From"] = SENDER_EMAIL
     msg["To"] = to_email
@@ -1152,12 +1180,9 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
     server = None
     try:
         logger.info(f"[EMAIL] Connecting to {SMTP_HOST} as {SENDER_EMAIL}")
-        # Force IPv4 to avoid 'Network is unreachable' on cloud platforms (Render)
         smtp_ip = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)[0][4][0]
         logger.info(f"[EMAIL] Resolved {SMTP_HOST} -> {smtp_ip} (IPv4)")
-        
-        # Try SSL on port 465 first (Render free tier blocks port 587)
-        # Then fall back to STARTTLS on port 587
+
         connected = False
         last_err = None
         for port, use_ssl in [(465, True), (SMTP_PORT, False)]:
@@ -1180,35 +1205,58 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
                     except: pass
                     server = None
                 continue
-        
+
         if not connected:
-            err = f"All SMTP ports failed. Last error: {type(last_err).__name__}: {last_err}"
-            logger.error(err)
-            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-            return False, err
-        
+            return False, f"All SMTP ports failed. Last error: {type(last_err).__name__}: {last_err}"
+
         server.send_message(msg)
-        log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
-        logger.info(f"[EMAIL] Sent to {to_email}")
+        logger.info(f"[EMAIL] SMTP sent to {to_email}")
         return True, None
     except smtplib.SMTPAuthenticationError as e:
-        err = f"Gmail auth failed (bad App Password?): {e}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+        return False, f"Gmail auth failed (bad App Password?): {e}"
     except Exception as e:
-        err = f"Email failed: {type(e).__name__}: {e}"
-        print(f"❌ {err}")
-        logger.error(err)
-        log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
-        return False, err
+        return False, f"SMTP failed: {type(e).__name__}: {e}"
     finally:
         if server:
-            try:
-                server.quit()
-            except:
-                pass
+            try: server.quit()
+            except: pass
+
+
+def send_email(to_email, subject, body, related_project_id=None, html_body=None):
+    # ── Strategy 1: Brevo HTTP API (works on Render) ──
+    if BREVO_API_KEY:
+        logger.info(f"[EMAIL] Sending via Brevo API to {to_email}")
+        ok, err = _send_email_brevo(to_email, subject, body, html_body)
+        if ok:
+            log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
+            logger.info(f"[EMAIL] ✅ Brevo delivered to {to_email}")
+            return True, None
+        else:
+            logger.warning(f"[EMAIL] Brevo failed: {err}")
+            # fall through to SMTP if available
+
+    # ── Strategy 2: SMTP (local dev / fallback) ──
+    if SENDER_EMAIL and APP_PASSWORD:
+        logger.info(f"[EMAIL] Trying SMTP fallback to {to_email}")
+        ok, err = _send_email_smtp(to_email, subject, body, html_body)
+        if ok:
+            log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
+            return True, None
+        else:
+            logger.error(f"[EMAIL] SMTP also failed: {err}")
+            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+            return False, err
+
+    # ── No transport available ──
+    err = (
+        f"No email transport available. "
+        f"BREVO_API_KEY={'SET' if BREVO_API_KEY else 'EMPTY'}, "
+        f"SENDER_EMAIL={'SET' if SENDER_EMAIL else 'EMPTY'}, "
+        f"APP_PASSWORD={'SET' if APP_PASSWORD else 'EMPTY'}"
+    )
+    logger.error(err)
+    log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+    return False, err
 
 def send_login_email(to_email, name, role, action):
     result, _err = send_email(
@@ -1335,7 +1383,11 @@ def client_send_otp():
         return jsonify({"success": True, "msg": "OTP sent"})
         
     except Exception as e:
-        return jsonify({"success": False, "msg": "Server error occurred"}), 500
+        import traceback
+        import sys
+        logger.error(f"Error in client_send_otp: {e}\n{traceback.format_exc()}")
+        print(f"ERROR: {e}\n{traceback.format_exc()}", file=sys.stderr)
+        return jsonify({"success": False, "msg": f"Server error: {e}"}), 500
 
 @app.route("/client/verify-otp", methods=["POST"])
 def client_verify_otp():
