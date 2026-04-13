@@ -87,7 +87,7 @@ async function request(endpoint, options = {}) {
     // Network errors
     if (error.message === 'Failed to fetch') {
       console.error('Network error - unable to connect to backend:', error);
-      throw new ApiError(`Unable to connect to the server. ${getApiConnectionHelp()}`, 0, null);
+      throw new ApiError("Unable to connect to the server. Please try again later.", 0, null);
     }
     
     throw new ApiError(error.message || 'Network error', 0, null);

@@ -31,8 +31,12 @@ from client_kyc_routes import client_kyc_bp
 from payment_routes import payment_bp
 from ticket_routes import ticket_bp
 import logging
+<<<<<<< HEAD
+from flask_cors import CORS
+app = Flask(__name__)
 
-# Configure logging
+CORS(app, origins=["https://giggbridge.netlify.app"])
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 file_handler = logging.FileHandler('persistent_error_log.txt', mode='w', encoding='utf-8')
@@ -343,6 +347,7 @@ def init_semantic_search():
         import logging
         logging.getLogger(__name__).warning(f"Semantic index not loaded: {_e}")
 
+<<<<<<< HEAD
 # init_semantic_search() # Called later in main thread or main block
 
 # ============================================================
@@ -353,8 +358,20 @@ def init_semantic_search():
 # EMAIL CONFIG
 # ============================================================
 
+SENDER_EMAIL = (
+    os.getenv("GIGBRIDGE_SENDER_EMAIL")
+    or os.getenv("EMAIL_USER")
+    or ""
+).strip()
+APP_PASSWORD = (
+    os.getenv("GIGBRIDGE_APP_PASSWORD")
+    or os.getenv("EMAIL_PASSWORD")
+    or ""
+).strip()
+=======
 SENDER_EMAIL = os.getenv("GIGBRIDGE_SENDER_EMAIL", "gigbridgee@gmail.com")
 APP_PASSWORD = os.getenv("GIGBRIDGE_APP_PASSWORD", "tvtplklbvcnrwmzt")
+>>>>>>> 4e9b5fc (updated API base URL)
 
 SMTP_HOST = (os.getenv("EMAIL_HOST") or "smtp.gmail.com").strip()
 try:
