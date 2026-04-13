@@ -88,7 +88,7 @@ def configure_cors(app):
         "http://127.0.0.1:5173",
         "https://localhost:3000",
         "https://localhost:5173",
-        "https://antigravitygig.netlify.app"
+        "https://giggbridge.netlify.app"
     ]
     
     # Add additional origins from environment if specified
