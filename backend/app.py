@@ -191,6 +191,8 @@ def health_check():
 def debug_email_config():
     """Temporary debug endpoint to verify email env vars are loaded."""
     return jsonify({
+        "BREVO_API_KEY": ("SET (" + str(len(BREVO_API_KEY)) + " chars)") if BREVO_API_KEY else "EMPTY",
+        "RESEND_API_KEY": ("SET (" + str(len(RESEND_API_KEY)) + " chars)") if RESEND_API_KEY else "EMPTY",
         "SENDER_EMAIL": (SENDER_EMAIL[:3] + "***") if SENDER_EMAIL else "EMPTY",
         "APP_PASSWORD_LENGTH": len(APP_PASSWORD) if APP_PASSWORD else 0,
         "SMTP_HOST": SMTP_HOST,
