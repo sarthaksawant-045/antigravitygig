@@ -1149,13 +1149,42 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
 
     server = None
     try:
-        logger.info(f"[EMAIL] Connecting to {SMTP_HOST}:{SMTP_PORT} as {SENDER_EMAIL}")
+        logger.info(f"[EMAIL] Connecting to {SMTP_HOST} as {SENDER_EMAIL}")
         # Force IPv4 to avoid 'Network is unreachable' on cloud platforms (Render)
-        smtp_ip = socket.getaddrinfo(SMTP_HOST, SMTP_PORT, socket.AF_INET)[0][4][0]
+        smtp_ip = socket.getaddrinfo(SMTP_HOST, None, socket.AF_INET)[0][4][0]
         logger.info(f"[EMAIL] Resolved {SMTP_HOST} -> {smtp_ip} (IPv4)")
-        server = smtplib.SMTP(smtp_ip, SMTP_PORT, timeout=30)
-        server.starttls()
-        server.login(SENDER_EMAIL, APP_PASSWORD)
+        
+        # Try SSL on port 465 first (Render free tier blocks port 587)
+        # Then fall back to STARTTLS on port 587
+        connected = False
+        last_err = None
+        for port, use_ssl in [(465, True), (SMTP_PORT, False)]:
+            try:
+                logger.info(f"[EMAIL] Trying port {port} ({'SSL' if use_ssl else 'STARTTLS'})...")
+                if use_ssl:
+                    server = smtplib.SMTP_SSL(smtp_ip, port, timeout=15)
+                else:
+                    server = smtplib.SMTP(smtp_ip, port, timeout=15)
+                    server.starttls()
+                server.login(SENDER_EMAIL, APP_PASSWORD)
+                connected = True
+                logger.info(f"[EMAIL] Connected on port {port}")
+                break
+            except Exception as port_err:
+                last_err = port_err
+                logger.warning(f"[EMAIL] Port {port} failed: {type(port_err).__name__}: {port_err}")
+                if server:
+                    try: server.quit()
+                    except: pass
+                    server = None
+                continue
+        
+        if not connected:
+            err = f"All SMTP ports failed. Last error: {type(last_err).__name__}: {last_err}"
+            logger.error(err)
+            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+            return False, err
+        
         server.send_message(msg)
         log_email(to_email, subject, body, status='Sent', project_id=related_project_id)
         logger.info(f"[EMAIL] Sent to {to_email}")
