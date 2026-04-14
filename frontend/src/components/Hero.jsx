@@ -54,6 +54,7 @@ export default function Hero() {
   const { user } = useAuth();
   const heroRef = useRef(null);
   const typewriterTerms = useMemo(() => TYPEWRITER_TERMS, []);
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   const [typedText, setTypedText] = useState("");
   const [termIndex, setTermIndex] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -344,6 +345,17 @@ export default function Hero() {
               <span>{HERO_CONTENT.secondaryButtonText}</span>
             </button>
           </div>
+          {isAndroid ? (
+            <div className="home-hero-buttons" data-home-reveal>
+              <a className="home-secondary-btn" data-magnetic href="/apk/gigbridge.apk" download>
+                <span>Download App</span>
+              </a>
+            </div>
+          ) : (
+            <p className="home-hero-subtitle" data-home-reveal>
+              Please open this site on an Android device to install the app.
+            </p>
+          )}
         </div>
 
       </div>
