@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import DashboardHeader from '../components/DashboardHeader';
 import DashboardSidebar from '../components/DashboardSidebar';
 import ConversationList from '../components/ConversationList';
@@ -12,6 +12,43 @@ import './dashboard.css';
 import './messages.css';
 
 const CHAT_EMPTY_ICON = '\u{1F4AC}';
+
+function formatChatTime(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  const asNumber = Number(value);
+  const date =
+    Number.isFinite(asNumber)
+      ? new Date(asNumber > 10_000_000_000 ? asNumber : asNumber * 1000)
+      : new Date(value);
+
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function extractMessagesPayload(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.messages)) return data.messages;
+  if (data && Array.isArray(data.chat)) return data.chat;
+  if (data && Array.isArray(data.data)) return data.data;
+  return [];
+}
+
+function normalizeApiMessage(msg, fallbackKey) {
+  const idPart = msg?.id ?? msg?.message_id ?? msg?.messageId ?? fallbackKey;
+  const senderId = msg?.sender_id ?? msg?.senderId ?? msg?.sender;
+  const senderRole = msg?.sender_role ?? msg?.senderRole ?? msg?.role;
+  const text = msg?.text ?? msg?.message ?? msg?.message_text ?? msg?.content ?? '';
+  const ts = msg?.timestamp ?? msg?.createdAt ?? msg?.created_at ?? msg?.time;
+
+  return {
+    id: idPart ?? fallbackKey,
+    senderId,
+    sender: senderRole === 'freelancer' ? 'freelancer' : 'client',
+    text,
+    timestamp: formatChatTime(ts)
+  };
+}
 
 export default function MessagesPage() {
   const { user } = useAuth();
@@ -59,16 +96,19 @@ export default function MessagesPage() {
     if (String(message.sender_id) === String(user.id)) return;
     
     const convId = message.conversation_id;
-    if (!convId) return;
-    
-    const convIdStr = convId.toString();
-    const normalizedMessage = {
-      id: message.id || `${message.timestamp}_${message.sender_id}`,
-      senderId: message.sender_id,
-      sender: message.sender_role === 'freelancer' ? 'freelancer' : 'client',
-      text: message.text,
-      timestamp: new Date(message.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+    const otherUserId = String(message.sender_id) === String(user.id) ? message.receiver_id : message.sender_id;
+    const resolvedConv =
+      convId
+        ? conversations.find(c => String(c.conversation_id) === String(convId) || String(c.id) === String(convId))
+        : conversations.find(c => String(c.clientId) === String(otherUserId));
+
+    const convIdStr = (convId ?? resolvedConv?.conversation_id ?? resolvedConv?.id)?.toString();
+    if (!convIdStr) return;
+
+    const normalizedMessage = normalizeApiMessage(
+      message,
+      `${message?.timestamp ?? Date.now()}_${message?.sender_id ?? message?.senderId ?? 'unknown'}`
+    );
 
     setMessages(prev => {
       const currentMessages = prev[convIdStr] || [];
@@ -84,7 +124,7 @@ export default function MessagesPage() {
 
     // Update conversation list
     setConversations(prev => prev.map(c => 
-      c.id === convIdStr ? { ...c, lastMessage: message.text, time: 'Just now' } : c
+      c.id === convIdStr ? { ...c, lastMessage: normalizedMessage.text, time: 'Just now' } : c
     ));
   };
 
@@ -117,7 +157,7 @@ export default function MessagesPage() {
             clientName: conv.other_user.name,
             avatar: conv.other_user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
             lastMessage: conv.last_message || '',
-            time: conv.timestamp ? new Date(conv.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+            time: formatChatTime(conv.updatedAt ?? conv.timestamp),
             unread: 0,
             online: false,
             clientId: conv.other_user.id,
@@ -151,14 +191,11 @@ export default function MessagesPage() {
         const response = await fetch(buildApiUrl(`/message/${selectedConv.conversation_id}`));
         const data = await response.json();
         
-        if (response.ok && data.success) {
-          const transformedMessages = data.messages.map(msg => ({
-            id: msg.id || `${msg.timestamp}_${msg.sender_id}`,
-            senderId: msg.sender_id,
-            sender: msg.sender_role === 'freelancer' ? 'freelancer' : 'client',
-            text: msg.text,
-            timestamp: new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          }));
+        if (response.ok && (data?.success ?? true)) {
+          const rawMessages = extractMessagesPayload(data);
+          const transformedMessages = rawMessages.map((msg, index) =>
+            normalizeApiMessage(msg, `${selectedConv?.conversation_id ?? selectedConvId}_${index}`)
+          );
           
           setMessages(prev => {
             const currentMessages = prev[selectedConvId] || [];
@@ -185,7 +222,7 @@ export default function MessagesPage() {
   }, [selectedConvId, conversations, user]);
 
   // Fetch messages when conversation is selected
-  const fetchMessages = async (conversationKey) => {
+  const fetchMessages = useCallback(async (conversationKey) => {
     if (!user.isAuthenticated || !user.id) return;
 
     try {
@@ -195,15 +232,11 @@ export default function MessagesPage() {
       const response = await fetch(buildApiUrl(`/message/${conv.conversation_id}`));
       const data = await response.json();
       
-      if (response.ok && data.success) {
-        // Transform API response to match UI structure
-        const transformedMessages = data.messages.map(msg => ({
-          id: msg.id || `${msg.timestamp}_${msg.sender_id}`,
-          senderId: msg.sender_id,
-          sender: msg.sender_role === 'freelancer' ? 'freelancer' : 'client',
-          text: msg.text,
-          timestamp: new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }));
+      if (response.ok && (data?.success ?? true)) {
+        const rawMessages = extractMessagesPayload(data);
+        const transformedMessages = rawMessages.map((msg, index) =>
+          normalizeApiMessage(msg, `${conv.conversation_id}_${index}`)
+        );
         
         console.log('[MSG] Messages loaded:', transformedMessages.length);
         setMessages(prev => ({
@@ -216,12 +249,18 @@ export default function MessagesPage() {
     } catch (err) {
       console.error('[MSG] Error fetching messages:', err);
     }
-  };
+  }, [conversations, user.isAuthenticated, user.id]);
 
   const selectedConv = useMemo(() => 
     conversations.find(c => c.id === selectedConvId), 
     [selectedConvId, conversations]
   );
+
+  useEffect(() => {
+    if (!selectedConvId || !user.isAuthenticated || !user.id) return;
+    if ((messages[selectedConvId] || []).length > 0) return;
+    fetchMessages(selectedConvId);
+  }, [selectedConvId, user.isAuthenticated, user.id, messages, fetchMessages]);
 
   useEffect(() => {
     if (!socketConnected || !selectedConv?.conversation_id) return;

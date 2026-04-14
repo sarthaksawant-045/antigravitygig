@@ -133,7 +133,7 @@ export default function AuthSignup() {
             </button>
           </div>
 
-          {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
+          {error && <div className="auth-alert">{error}</div>}
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <label>
@@ -211,7 +211,7 @@ export default function AuthSignup() {
               </label>
               <button
                 type="button"
-                className="link-like"
+                className={`link-like${loading ? " is-loading" : ""}`}
                 onClick={handleSendOTP}
                 disabled={loading || !formData.email}
               >
@@ -219,11 +219,16 @@ export default function AuthSignup() {
               </button>
             </div>
 
-            <button className="auth-primary" type="submit" disabled={loading}>
+            <button className={`auth-primary${loading ? " is-loading" : ""}`} type="submit" disabled={loading}>
               {loading ? "Creating..." : "Create Account"}
             </button>
 
-            <button type="button" className="auth-google" onClick={handleGoogleSignup} disabled={googleLoading}>
+            <button
+              type="button"
+              className={`auth-google${googleLoading ? " is-loading" : ""}`}
+              onClick={handleGoogleSignup}
+              disabled={googleLoading}
+            >
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" />
               {googleLoading ? "Connecting to Google..." : "Continue with Google"}
             </button>

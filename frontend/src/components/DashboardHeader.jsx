@@ -43,7 +43,7 @@ export default function DashboardHeader({ onSearch }) {
           <div className="db-avatar">{name.slice(0, 1).toUpperCase()}</div>
           <span className="db-username">{name}</span>
           {premiumActive && (
-            <span style={{ marginLeft: "8px", padding: "4px 8px", borderRadius: "999px", background: "#dbeafe", color: "#1d4ed8", fontSize: "12px", fontWeight: 700 }}>
+            <span className="db-premium-pill">
               Premium
             </span>
           )}

@@ -104,7 +104,7 @@ export default function AuthLogin() {
             </button>
           </div>
 
-          {error && <div style={{ color: '#dc2626', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
+          {error && <div className="auth-alert">{error}</div>}
 
           <form className="auth-form" onSubmit={handleSubmit}>
             <label>
@@ -147,20 +147,25 @@ export default function AuthLogin() {
               </div>
             </label>
 
-            <div style={{ textAlign: 'right', marginTop: '-0.5rem', marginBottom: '0.5rem' }}>
+            <div className="auth-inline-link-row">
               <Link
                 to={`/forgot-password/${role}`}
-                style={{ fontSize: '0.85rem', color: '#2563eb', textDecoration: 'none' }}
+                className="auth-inline-link"
               >
                 Forgot Password?
               </Link>
             </div>
 
-            <button className="auth-primary" type="submit" disabled={loading}>
+            <button className={`auth-primary${loading ? " is-loading" : ""}`} type="submit" disabled={loading}>
               {loading ? "Logging in..." : "Login"}
             </button>
 
-            <button type="button" className="auth-google" onClick={handleGoogleLogin} disabled={googleLoading}>
+            <button
+              type="button"
+              className={`auth-google${googleLoading ? " is-loading" : ""}`}
+              onClick={handleGoogleLogin}
+              disabled={googleLoading}
+            >
               <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="" />
               {googleLoading ? "Connecting to Google..." : "Continue with Google"}
             </button>

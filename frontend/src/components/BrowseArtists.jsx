@@ -43,6 +43,25 @@ function mapFreelancer(f) {
   };
 }
 
+function getCardDisplayData(artist) {
+  const description = artist.description?.trim() || "";
+  const role = artist.category?.trim() || "Freelancer";
+  const tags = Array.isArray(artist.portfolio)
+    ? artist.portfolio.filter((tag) => typeof tag === "string" && tag.trim())
+    : [];
+
+  return {
+    description: description || "New artist on platform",
+    hasDescription: Boolean(description),
+    role,
+    tags: tags.length ? tags : ["New"],
+    hasTags: Boolean(tags.length),
+    price: artist.priceRange && artist.priceRange !== "Not specified"
+      ? artist.priceRange
+      : "Price not specified",
+  };
+}
+
 export default function BrowseArtists() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -283,20 +302,33 @@ export default function BrowseArtists() {
               <div className="ba-empty-sub">Try adjusting your filters or check back later.</div>
             </div>
           ) : (
-            filteredArtists.map((a) => (
-              <article className="ba-card" key={a.id}>
+            filteredArtists.map((a) => {
+              const card = getCardDisplayData(a);
+
+              return (
+              <article
+                className="ba-card hover:shadow-md hover:-translate-y-1 transition duration-300"
+                key={a.id}
+              >
                 <div className="ba-card-left">
-                  <div className="ba-avatar-wrap">
-                    <img src={a.image} alt={a.name} className="ba-avatar" />
+                  <div className="ba-avatar-wrap w-14 h-14 rounded-xl">
+                    <img src={a.image} alt={a.name} className="ba-avatar w-14 h-14 rounded-xl" />
                     {a.online && <span className="ba-online" />}
                   </div>
                 </div>
                 <div className="ba-card-mid">
                   <div className="ba-name">{a.name}</div>
-                  <div className="ba-role" onClick={() => navigate(`/artist/${a.id}`)}>{a.category}</div>
-                  <p className="ba-bio">{a.description}</p>
+                  <div className="ba-role" onClick={() => navigate(`/artist/${a.id}`)}>{card.role}</div>
+                  <p className={`ba-bio ${card.hasDescription ? "" : "text-gray-500 italic"}`}>{card.description}</p>
                   <div className="ba-tags">
-                    {(a.portfolio || []).map((t) => <span key={t} className="ba-tag">{t}</span>)}
+                    {card.tags.map((t) => (
+                      <span
+                        key={t}
+                        className={`ba-tag ${card.hasTags ? "" : "bg-gray-100 text-gray-500"}`}
+                      >
+                        {t}
+                      </span>
+                    ))}
                   </div>
                   <div className="ba-actions">
                     <button className="ba-invite" onClick={() => navigate(`/artist/${a.id}`)}>Know More About</button>
@@ -314,10 +346,10 @@ export default function BrowseArtists() {
                     {isFavorite(a.id) ? "❤️" : "🤍"}
                   </button>
                   <div className="ba-rating">⭐ {a.rating || "—"}</div>
-                  <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{a.priceRange}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', textAlign: 'right' }}>{card.price}</div>
                 </div>
               </article>
-            ))
+            )})
           )}
         </div>
       </section>

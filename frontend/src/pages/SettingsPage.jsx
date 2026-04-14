@@ -328,14 +328,14 @@ const SettingsPage = () => {
             </div>
 
             {/* Block 4: Danger Zone */}
-            <div className="settings-card">
+            <div className="settings-card danger-zone-card">
               <div className="card-header">
                 <Shield className="card-icon danger" />
                 <h3>Danger Zone</h3>
               </div>
-              <div className="card-content">
-                <p>Once you delete your account, there is no going back. Please be certain.</p>
-                <button className="btn-danger" onClick={handleDeleteAccount}>Delete Account</button>
+              <div className="card-content danger-zone-content">
+                <p className="danger-zone-text">Once you delete your account, there is no going back. Please be certain.</p>
+                <button className="btn-danger danger-zone-btn" onClick={handleDeleteAccount}>Delete Account</button>
               </div>
             </div>
           </div>

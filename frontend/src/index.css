@@ -1,3 +1,52 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --gb-bg: #f8fbff;
+  --gb-bg-soft: #f1f7ff;
+  --gb-surface: rgba(255, 255, 255, 0.94);
+  --gb-surface-strong: #ffffff;
+  --gb-surface-muted: #f3f8ff;
+  --gb-border: rgba(148, 184, 255, 0.22);
+  --gb-border-strong: rgba(96, 165, 250, 0.34);
+  --gb-text: #0f172a;
+  --gb-text-soft: #475569;
+  --gb-text-muted: #64748b;
+  --gb-primary: #2563eb;
+  --gb-primary-strong: #1d4ed8;
+  --gb-primary-soft: #dbeafe;
+  --gb-accent: #60a5fa;
+  --gb-success: #059669;
+  --gb-danger: #dc2626;
+  --gb-warning: #d97706;
+  --gb-radius-sm: 14px;
+  --gb-radius-md: 20px;
+  --gb-radius-lg: 28px;
+  --gb-shadow-sm: 0 12px 32px rgba(37, 99, 235, 0.08);
+  --gb-shadow-md: 0 22px 60px rgba(15, 23, 42, 0.12);
+  --gb-shadow-lg: 0 32px 90px rgba(37, 99, 235, 0.16);
+  --gb-transition: 220ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  --db-sidebar-width: 360px;
+  --db-messages-list-width: 360px;
+  --db-sidebar-nudge-x: -12px;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(219, 234, 254, 0.75), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, #f9fafb 100%);
+  color: var(--gb-text);
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+  color: var(--gb-text);
+}

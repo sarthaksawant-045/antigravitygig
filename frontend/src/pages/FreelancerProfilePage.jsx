@@ -253,7 +253,7 @@ export default function FreelancerProfilePage() {
         <DashboardSidebar active={active} onSelect={setActive} />
         <main className="db-main profile-page">
           <div className="profile-top-bar">
-            <div className="db-welcome">
+            <div className="profile-top-card">
               <h2>Profile</h2>
               <p>Manage your freelancer profile and preferences</p>
             </div>

@@ -127,37 +127,19 @@ export default function ArtistDashboard() {
                 <div className="db-booking-info">
                   <div className="db-booking-title">{b.event}</div>
                   <div className="db-booking-sub">{b.client} • {b.date}</div>
-                  <div style={{ marginTop: '8px' }}>
-                    <span style={{ 
-                      fontSize: '0.7rem', 
-                      padding: '2px 8px', 
-                      borderRadius: '12px', 
-                      background: b.status === 'VERIFIED' ? '#dcfce7' : b.status === 'COMPLETED' ? '#f1f5f9' : '#fef9c3',
-                      color: b.status === 'VERIFIED' ? '#166534' : b.status === 'COMPLETED' ? '#475569' : '#854d0e',
-                      fontWeight: 600,
-                      textTransform: 'uppercase'
-                    }}>
+                  <div>
+                    <span className={`db-booking-status is-${String(b.status || '').toLowerCase()}`}>
                       {b.status}
                     </span>
                   </div>
                 </div>
-                <div style={{ minWidth: 180, textAlign: 'right' }}>
+                <div className="db-booking-actions">
                   <div className="db-booking-val">₹{b.value?.toLocaleString?.() || b.value}</div>
                   <div className="db-booking-bar"><div className="db-booking-fill" style={{ width: `${b.progress}%` }} /></div>
                   {(b.status === 'ACCEPTED' || b.status === 'IN_PROGRESS') && (
                     <button 
                       onClick={() => handleComplete(b.id)}
-                      style={{ 
-                        marginTop: '8px', 
-                        padding: '4px 12px', 
-                        fontSize: '0.75rem', 
-                        background: '#2563eb', 
-                        color: 'white', 
-                        border: 'none', 
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
+                      className="db-booking-complete-btn"
                     >
                       Mark Complete
                     </button>

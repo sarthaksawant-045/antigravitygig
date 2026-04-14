@@ -139,27 +139,26 @@ export default function MyProjects() {
         <button
           className="post-project-btn"
           onClick={() => navigate("/client/post-project")}
-          style={{ marginTop: '0.5rem' }}
         >
           + Post New Project
         </button>
       </div>
 
       {error && (
-        <div style={{ background: '#fef2f2', color: '#dc2626', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+        <div className="projects-alert">
           {error}
         </div>
       )}
 
       {/* Active Contracts Section */}
-      <div className="section-divider" style={{ margin: '2rem 0', borderTop: '2px solid #e2e8f0' }}></div>
+      <div className="section-divider"></div>
       <div className="my-projects-header">
         <h1>Active Contracts</h1>
         <p>Direct hires and ongoing projects</p>
       </div>
 
       {contracts.length === 0 ? (
-        <div className="empty-state" style={{ padding: '2rem' }}>
+        <div className="empty-state">
           <p>No active contracts found.</p>
         </div>
       ) : (
@@ -182,17 +181,17 @@ export default function MyProjects() {
                 <span className="budget">{ICONS.money} {ICONS.rupee}{contract.agreed_price?.toLocaleString()}</span>
               </div>
 
-              <div className="card-footer" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="card-footer">
+                <div className="project-contract-actions">
                   {contract.status === "COMPLETED" ? (
                     <button 
-                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', width: '100%', fontWeight: 600, cursor: 'pointer' }}
+                      className="project-action-btn"
                       onClick={() => handleVerify(contract.id)}
                     >
                       Verify & Release Payout
                     </button>
                   ) : (
-                    <div style={{ color: '#64748b', fontSize: '0.85rem', textAlign: 'center' }}>
+                    <div className="contract-status-note">
                       {contract.status === "VERIFIED" ? `${ICONS.check} Payout Requested` : `${ICONS.pending} Work in Progress`}
                     </div>
                   )}
@@ -200,7 +199,7 @@ export default function MyProjects() {
                   {['ACCEPTED', 'IN_PROGRESS', 'COMPLETED', 'VERIFIED'].includes(String(contract.status || '').toUpperCase()) &&
                     !['PAID', 'REFUNDED', 'DISPUTED'].includes(String(contract.payment_status || '').toUpperCase()) && (
                       <button
-                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', width: '100%', fontWeight: 600, cursor: 'pointer' }}
+                        className="project-action-btn-danger"
                         onClick={() => handleOpenDispute(contract)}
                       >
                         Raise Dispute
@@ -208,7 +207,7 @@ export default function MyProjects() {
                     )}
 
                   {String(contract.payment_status || '').toUpperCase() === 'DISPUTED' && (
-                    <div style={{ color: '#dc2626', fontSize: '0.85rem', textAlign: 'center', fontWeight: 600 }}>
+                    <div className="contract-status-note disputed">
                       Dispute Raised
                     </div>
                   )}
@@ -219,7 +218,7 @@ export default function MyProjects() {
         </div>
       )}
 
-      <div className="section-divider" style={{ margin: '2rem 0', borderTop: '2px solid #e2e8f0' }}></div>
+      <div className="section-divider"></div>
       <div className="my-projects-header">
         <h1>Job Posts</h1>
         <p>Marketplace listings</p>
@@ -260,12 +259,12 @@ export default function MyProjects() {
                   <span className="deadline">{ICONS.date} {project.created_at ? new Date(project.created_at * 1000).toLocaleDateString() : ""}</span>
                 </div>
 
-                <div className="card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #f1f5f9' }}>
-                  <span className={`status-text ${project.status === "ASSIGNED" ? "active" : "pending"}`} style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                <div className="card-footer project-card-footer">
+                  <span className={`status-text ${project.status === "ASSIGNED" ? "active" : "pending"}`}>
                     {project.status === "ASSIGNED" ? `${ICONS.check} Artist Hired` : `${ICONS.pending} Awaiting Applications`}
                   </span>
                   <button 
-                    style={{ background: '#2563eb', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '8px', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                    className="view-applicants-btn"
                     onClick={() => navigate(`/project/${project.id}/applicants`)}
                   >
                     View Applicants

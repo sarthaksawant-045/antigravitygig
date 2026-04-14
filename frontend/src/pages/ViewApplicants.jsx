@@ -176,7 +176,7 @@ export default function ViewApplicants() {
                 </div>
               </div>
               
-              <div className="applicant-bio" style={{ marginTop: '1rem' }}>
+              <div className="applicant-bio">
                 <h4>Proposal:</h4>
                 <p>{applicant.proposal || "No proposal text provided."}</p>
               </div>
@@ -212,17 +212,17 @@ export default function ViewApplicants() {
       )}
 
       {selectedApp && (
-        <div className="selected-notice" style={{ background: '#ecfdf5', border: '1px solid #10b981', padding: '1.5rem', borderRadius: '12px', marginTop: '2rem' }}>
-          <h3 style={{ color: '#065f46', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="selected-notice">
+          <h3>
             ✓ Hired Applicant
           </h3>
-          <div className="selected-artist-info" style={{ display: 'flex', gap: '12px', alignItems: 'center', margin: '1rem 0' }}>
-            <div className="opp-avatar" style={{ background: '#10b981', color: 'white' }}>
+          <div className="selected-artist-info">
+            <div className="opp-avatar">
               {selectedApp.freelancer_name?.slice(0,1).toUpperCase()}
             </div>
             <div>
-              <p style={{ margin: 0, fontWeight: 600 }}>{selectedApp.freelancer_name}</p>
-              <p style={{ margin: 0, fontSize: '0.85rem', color: '#4b5563' }}>{selectedApp.freelancer_title}</p>
+              <p>{selectedApp.freelancer_name}</p>
+              <p className="selected-category">{selectedApp.freelancer_title}</p>
             </div>
           </div>
           <div className="selected-actions">
@@ -230,7 +230,7 @@ export default function ViewApplicants() {
               Message Artist
             </button>
             <button 
-              style={{ background: '#2563eb', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, marginLeft: '10px' }}
+              className="selected-primary-btn"
               onClick={() => navigate("/payment")}
             >
               Go to Payments to pay invoice

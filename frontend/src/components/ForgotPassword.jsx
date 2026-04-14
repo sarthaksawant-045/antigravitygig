@@ -95,11 +95,11 @@ export default function ForgotPassword() {
             </div>
           )}
 
-          {error && <div style={{color: '#dc2626', marginBottom: '1rem', fontSize: '0.9rem'}}>{error}</div>}
+          {error && <div className="auth-alert">{error}</div>}
 
           {step === STEPS.EMAIL && (
             <form className="auth-form" onSubmit={handleSendOTP}>
-              <p style={{color: '#6b7280', marginBottom: '1rem', fontSize: '0.9rem'}}>
+              <p className="auth-helper">
                 Enter the email address associated with your {role} account. We'll send you a verification code.
               </p>
               <label>
@@ -112,7 +112,7 @@ export default function ForgotPassword() {
                   required
                 />
               </label>
-              <button className="auth-primary" type="submit" disabled={loading}>
+              <button className={`auth-primary${loading ? " is-loading" : ""}`} type="submit" disabled={loading}>
                 {loading ? "Sending..." : "Send Reset Code"}
               </button>
             </form>
@@ -120,7 +120,7 @@ export default function ForgotPassword() {
 
           {step === STEPS.OTP && (
             <form className="auth-form" onSubmit={handleVerifyOTP}>
-              <p style={{color: '#6b7280', marginBottom: '1rem', fontSize: '0.9rem'}}>
+              <p className="auth-helper">
                 We sent a 6-digit code to <strong>{email}</strong>. Enter it below.
               </p>
               <label>
@@ -132,18 +132,17 @@ export default function ForgotPassword() {
                   value={otp}
                   onChange={(e) => { setOtp(e.target.value); setError(""); }}
                   required
-                  style={{textAlign: 'center', letterSpacing: '0.5em', fontSize: '1.2rem'}}
+                  className="auth-code-input"
                 />
               </label>
-              <button className="auth-primary" type="submit" disabled={loading}>
+              <button className={`auth-primary${loading ? " is-loading" : ""}`} type="submit" disabled={loading}>
                 {loading ? "Verifying..." : "Verify Code"}
               </button>
               <button
                 type="button"
-                className="link-like"
+                className={`link-like${loading ? " is-loading" : ""}`}
                 onClick={handleSendOTP}
                 disabled={loading}
-                style={{marginTop: '0.5rem', fontSize: '0.85rem'}}
               >
                 Resend Code
               </button>
@@ -152,7 +151,7 @@ export default function ForgotPassword() {
 
           {step === STEPS.RESET && (
             <form className="auth-form" onSubmit={handleResetPassword}>
-              <p style={{color: '#6b7280', marginBottom: '1rem', fontSize: '0.9rem'}}>
+              <p className="auth-helper">
                 Create a new password for your account.
               </p>
               <label>
@@ -177,17 +176,17 @@ export default function ForgotPassword() {
                   minLength={6}
                 />
               </label>
-              <button className="auth-primary" type="submit" disabled={loading}>
+              <button className={`auth-primary${loading ? " is-loading" : ""}`} type="submit" disabled={loading}>
                 {loading ? "Resetting..." : "Reset Password"}
               </button>
             </form>
           )}
 
           {step === STEPS.DONE && (
-            <div style={{textAlign: 'center', padding: '2rem 0'}}>
-              <div style={{fontSize: '3rem', marginBottom: '1rem'}}>&#10003;</div>
-              <h3 style={{marginBottom: '0.5rem'}}>Password Reset Complete</h3>
-              <p style={{color: '#6b7280', marginBottom: '1.5rem'}}>
+            <div className="auth-success-state">
+              <div className="auth-success-icon">&#10003;</div>
+              <h3>Password Reset Complete</h3>
+              <p>
                 Your password has been updated. You can now log in with your new password.
               </p>
               <button

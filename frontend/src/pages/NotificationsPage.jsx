@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getNotifications, markAsRead, markAllAsRead, getUnreadCount } from '../services/notificationService';
 import socketService from '../services/socketService';
+import './notifications.css';
 
 const EMPTY_NOTIFICATIONS_ICON = "\u{1F4ED}";
 
@@ -114,58 +115,57 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="page-wrap" style={{ marginTop: '24px' }}>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h1 className="page-title" style={{ margin: 0 }}>
-          Notifications{unreadCount > 0 ? ` (${unreadCount})` : ''}
-        </h1>
+    <div className="notifications-page">
+      <button className="notifications-back-btn" onClick={() => navigate(-1)}>
+        ← Back
+      </button>
+      <div className="notifications-page-header">
+        <div>
+          <h1 className="notifications-page-title">
+            Notifications{unreadCount > 0 ? ` (${unreadCount})` : ''}
+          </h1>
+          <p className="notifications-page-subtitle">
+            Stay on top of project updates, responses, and platform activity.
+          </p>
+        </div>
         {hasUnread && (
-          <button className="mark-all-btn" onClick={handleMarkAllAsRead} style={{ background: 'transparent', color: '#3b82f6', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '14px' }}>
+          <button className="notifications-mark-all" onClick={handleMarkAllAsRead}>
             Mark all as read
           </button>
         )}
       </div>
 
-      <div className="page-card" style={{ padding: '0', overflow: 'hidden' }}>
+      <div className="notifications-card">
         {loading ? (
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="notifications-loading">
+            <div className="skeleton-item"></div>
             <div className="skeleton-item"></div>
             <div className="skeleton-item"></div>
           </div>
         ) : notifications.length === 0 ? (
-          <div style={{ padding: '48px', textAlign: 'center', color: '#6b7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>{EMPTY_NOTIFICATIONS_ICON}</div>
+          <div className="notifications-empty">
+            <div className="notifications-empty-icon">{EMPTY_NOTIFICATIONS_ICON}</div>
             <p>You have no new notifications.</p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {notifications.map((notif, index) => (
+          <div className="notifications-list">
+            {notifications.map((notif) => (
               <div
                 key={notif.notification_id}
-                className="fade-in"
+                className={`notification-row fade-in ${notif.is_read ? '' : 'is-unread'}`}
                 onClick={() => handleNotificationClick(notif)}
-                style={{
-                  padding: '20px 24px',
-                  borderBottom: index !== notifications.length - 1 ? '1px solid #f3f4f6' : 'none',
-                  background: notif.is_read ? '#ffffff' : '#f0f9ff',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: 'background 0.2s ease'
-                }}
               >
-                <div>
-                  <p style={{ margin: '0 0 6px 0', fontSize: '15px', color: '#1f2937', fontWeight: notif.is_read ? 500 : 700 }}>
+                <div className="notification-row-copy">
+                  <p className="notification-row-title">
                     {notif.title}
                   </p>
-                  <p style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#1f2937', fontWeight: notif.is_read ? 400 : 500 }}>
+                  <p className="notification-row-message">
                     {notif.message}
                   </p>
-                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>{formatRelativeTime(notif.created_at)}</span>
+                  <span className="notification-row-time">{formatRelativeTime(notif.created_at)}</span>
                 </div>
                 {!notif.is_read && (
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }}></div>
+                  <div className="notification-row-dot"></div>
                 )}
               </div>
             ))}

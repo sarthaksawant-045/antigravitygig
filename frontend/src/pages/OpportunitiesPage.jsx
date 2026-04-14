@@ -287,8 +287,8 @@ function ApplySuccessModal({ projectTitle }) {
 }
 
 export default function OpportunitiesPage() {
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [tab, setTab] = useState("hireRequests");
   const [hireRequests, setHireRequests] = useState([]);
@@ -555,6 +555,9 @@ export default function OpportunitiesPage() {
   return (
     <main className="opportunities-shell">
       <div className="opportunities-page">
+        <button className="opps-back-btn" onClick={() => navigate(-1)}>
+          ← Back
+        </button>
         <header className="opps-header">
           <h1>Opportunities</h1>
           <p>Browse hire requests and available projects in your area.</p>

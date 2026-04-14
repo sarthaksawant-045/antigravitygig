@@ -12,6 +12,26 @@
   gap: 20px;
 }
 
+.opps-back-btn {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d4ed8;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.opps-back-btn:hover {
+  transform: translateY(-1px);
+  border-color: #93c5fd;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.12);
+}
+
 .opps-header {
   display: flex;
   flex-direction: column;
@@ -97,12 +117,12 @@
 
 .opps-search {
   flex: 1 1 320px;
-  min-height: 56px;
+  min-height: 50px;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 0 18px;
-  border-radius: 999px;
+  border-radius: 18px;
   border: 1.5px solid #bfdbfe;
   background: #ffffff;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
