@@ -45,9 +45,28 @@ function normalizeApiMessage(msg, fallbackKey) {
     id: idPart ?? fallbackKey,
     senderId,
     sender: senderRole === 'freelancer' ? 'freelancer' : 'client',
-    text,
+    text: String(text ?? ''),
     timestamp: formatChatTime(ts)
   };
+}
+
+function mergeMessages(existingMessages, incomingMessages) {
+  const out = [];
+  const seen = new Set();
+
+  const pushUnique = (msg) => {
+    if (!msg) return;
+    const idKey = msg.id !== undefined && msg.id !== null ? `id:${String(msg.id)}` : '';
+    const sigKey = `sig:${String(msg.senderId)}:${String(msg.timestamp)}:${String(msg.text)}`;
+    const key = idKey || sigKey;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(msg);
+  };
+
+  (existingMessages || []).forEach(pushUnique);
+  (incomingMessages || []).forEach(pushUnique);
+  return out;
 }
 
 export default function MessagesPage() {
@@ -239,10 +258,19 @@ export default function MessagesPage() {
         );
         
         console.log('[MSG] Messages loaded:', transformedMessages.length);
-        setMessages(prev => ({
-          ...prev,
-          [conversationKey.toString()]: transformedMessages
-        }));
+        setMessages(prev => {
+          const key = conversationKey.toString();
+          const currentMessages = prev[key] || [];
+          const mergedMessages =
+            transformedMessages.length > 0
+              ? mergeMessages(currentMessages, transformedMessages)
+              : currentMessages;
+
+          return {
+            ...prev,
+            [key]: mergedMessages
+          };
+        });
       } else {
         console.error('[MSG] Failed to fetch messages:', data.msg);
       }
