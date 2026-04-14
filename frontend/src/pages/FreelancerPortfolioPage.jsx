@@ -38,11 +38,23 @@ export default function FreelancerPortfolioPage() {
 
       try {
         const response = await freelancerService.getPortfolio(user.id);
-        const items = response.portfolio || response.portfolio_items || [];
+        const items = Array.isArray(response) ? response : (response?.portfolio || response?.portfolio_items || []);
         setProjects(normalizePortfolioItems(items));
+        setError('');
       } catch (err) {
-        setError(err.message || 'Failed to load portfolio');
-        setProjects([]);
+        const status = err?.status;
+        const msg = err?.message || '';
+
+        const isNetworkError = status === 0 || msg.includes('Failed to fetch') || msg.includes('Unable to connect');
+        const isServerError = status >= 500;
+        const isBadRequest = status === 400; // Only capture true bad requests, not 404s
+
+        if (isNetworkError || isServerError || isBadRequest) {
+          setError(msg || 'Failed to load portfolio');
+        } else {
+          setProjects([]);
+          setError('');
+        }
       } finally {
         setLoading(false);
       }
@@ -86,17 +98,17 @@ export default function FreelancerPortfolioPage() {
           <PortfolioHeader onAddClick={() => setIsModalOpen(true)} />
 
           {error && (
-            <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '12px' }}>
+            <div style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', padding: '12px 16px', borderRadius: '12px', marginBottom: '20px' }}>
               {error}
             </div>
           )}
 
           {loading ? (
-            <div style={{ color: '#64748b' }}>Loading portfolio...</div>
-          ) : projects.length > 0 ? (
+            <div style={{ color: '#64748b', padding: '20px 0' }}>Loading portfolio...</div>
+          ) : projects?.length > 0 ? (
             <PortfolioGrid projects={projects} />
           ) : (
-            <EmptyPortfolioState onAddClick={() => setIsModalOpen(true)} />
+            !error && <EmptyPortfolioState onAddClick={() => setIsModalOpen(true)} />
           )}
         </main>
       </div>
