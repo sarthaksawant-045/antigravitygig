@@ -141,6 +141,21 @@ export const adminUsersApi = {
     });
     return { data };
   },
+
+  cleanupTestData: async () => {
+    const data = await adminFetch('/admin/cleanup-test-data', {
+      method: 'POST',
+    });
+    return { data };
+  },
+
+  verifyUserEmail: async (role, id) => {
+    const data = await adminFetch('/admin/user/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ role, id }),
+    });
+    return { data };
+  },
 };
 
 export const adminKycApi = {

@@ -59,9 +59,9 @@ export default function AdminClients() {
     setActionLoading(clientId);
     try {
       if (currentStatus === 'enabled') {
-        await adminUsersApi.disableUser(clientId);
+        await adminUsersApi.disableUser('client', clientId);
       } else {
-        await adminUsersApi.enableUser(clientId);
+        await adminUsersApi.enableUser('client', clientId);
       }
       await loadClients();
     } catch (err) {
@@ -72,13 +72,13 @@ export default function AdminClients() {
   };
 
   const handleDeleteUser = async (clientId) => {
-    if (!confirm('Are you sure you want to delete this user? This will be a soft-delete.')) return;
+    if (!confirm('Are you sure you want to permanently soft-delete this client? This action cannot be easily undone.')) return;
     setActionLoading(clientId);
     try {
-      await adminUsersApi.deleteUser(clientId);
+      await adminUsersApi.deleteUser('client', clientId);
       await loadClients();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to delete user');
+      alert(err.response?.data?.message || 'Failed to delete client');
     } finally {
       setActionLoading(null);
     }

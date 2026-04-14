@@ -66,9 +66,9 @@ export default function AdminFreelancers() {
     setActionLoading(freelancerId);
     try {
       if (currentStatus === 'enabled') {
-        await adminUsersApi.disableUser(freelancerId);
+        await adminUsersApi.disableUser('freelancer', freelancerId);
       } else {
-        await adminUsersApi.enableUser(freelancerId);
+        await adminUsersApi.enableUser('freelancer', freelancerId);
       }
       await loadFreelancers();
     } catch (err) {
@@ -79,13 +79,13 @@ export default function AdminFreelancers() {
   };
 
   const handleDeleteUser = async (freelancerId) => {
-    if (!confirm('Are you sure you want to delete this user? This will be a soft-delete.')) return;
+    if (!confirm('Are you sure you want to permanently soft-delete this freelancer? This action cannot be easily undone.')) return;
     setActionLoading(freelancerId);
     try {
-      await adminUsersApi.deleteUser(freelancerId);
+      await adminUsersApi.deleteUser('freelancer', freelancerId);
       await loadFreelancers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to delete user');
+      alert(err.response?.data?.message || 'Failed to delete freelancer');
     } finally {
       setActionLoading(null);
     }

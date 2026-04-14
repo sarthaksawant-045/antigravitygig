@@ -64,6 +64,7 @@ export default function AdminEmailLogs() {
             <option value="all">All Delivery Status</option>
             <option value="Sent">Sent</option>
             <option value="Failed">Failed</option>
+            <option value="Blocked">Blocked (Invalid Email)</option>
           </select>
         </div>
       </div>
@@ -111,10 +112,14 @@ export default function AdminEmailLogs() {
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
-                          log.status === 'Sent' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                          log.status === 'Sent'
+                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                            : log.status === 'Blocked'
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            : 'bg-red-500/10 text-red-400 border-red-500/20'
                         }`}>
-                          {log.status === 'Sent' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                          {log.status}
+                          {log.status === 'Sent' ? <CheckCircle className="w-3 h-3" /> : log.status === 'Blocked' ? <AlertCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                          {log.status === 'Blocked' ? '⛔ Blocked' : log.status}
                         </span>
                         {log.error_message && (
                           <div className="text-[10px] text-red-400 max-w-[200px] truncate" title={log.error_message}>
@@ -137,7 +142,7 @@ export default function AdminEmailLogs() {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        {log.status === 'Failed' && (
+                        {(log.status === 'Failed') && (
                           <button 
                             onClick={() => handleRetry(log.id)}
                             className="p-2 text-sky-400 hover:bg-sky-500/10 rounded-lg transition-colors"

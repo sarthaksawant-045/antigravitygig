@@ -760,11 +760,11 @@ def admin_payments():
 @require_admin
 def admin_payment_override():
     d = request.get_json(silent=True) or {}
-    aid = d.get("id") # audit_log id
+    aid = d.get("id")  # audit_log id
     status = d.get("status")
     if not aid or not status:
         return jsonify({"success": False, "msg": "Invalid"}), 400
-    
+
     f = freelancer_db()
     try:
         cur = f.cursor()
@@ -784,7 +784,7 @@ def admin_payment_override():
 def admin_email_logs():
     status = request.args.get("status")
     search = request.args.get("search", "").strip().lower()
-    
+
     f = freelancer_db()
     try:
         cur = f.cursor()
@@ -797,11 +797,11 @@ def admin_email_logs():
             query += " AND (LOWER(to_email) LIKE %s OR LOWER(subject) LIKE %s)"
             s = f"%{search}%"
             params.extend([s, s])
-            
+
         query += " ORDER BY created_at DESC LIMIT 100"
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
-        
+
         res = []
         for r in rows:
             res.append({
@@ -841,3 +841,106 @@ def admin_email_retry():
             return jsonify({"success": False, "msg": "Retry failed again"})
     finally:
         f.close()
+
+
+# ============================================================
+# TEST DATA CLEANUP
+# ============================================================
+
+@admin_bp.route("/admin/cleanup-test-data", methods=["POST"])
+@require_admin
+def admin_cleanup_test_data():
+    """
+    Soft-delete all users whose email ends with a placeholder/test domain.
+    Safe: uses is_deleted + is_enabled flags, does NOT hard-delete rows.
+    """
+    TEST_DOMAINS = (
+        "@example.com", "@example.org", "@example.net",
+        "@test.com", "@test.org", "@test.net",
+        "@mailinator.com", "@guerrillamail.com", "@yopmail.com",
+    )
+
+    admin_id = getattr(request, "admin_id", None)
+    cleaned = {"clients": 0, "freelancers": 0}
+
+    # --- Clients ---
+    c = client_db()
+    try:
+        cur = c.cursor()
+        for domain in TEST_DOMAINS:
+            cur.execute(
+                "UPDATE client SET is_deleted=1, is_enabled=0 WHERE LOWER(email) LIKE %s AND is_deleted=0",
+                (f"%{domain}",)
+            )
+            cleaned["clients"] += cur.rowcount
+        c.commit()
+    finally:
+        c.close()
+
+    # --- Freelancers ---
+    f = freelancer_db()
+    try:
+        cur = f.cursor()
+        for domain in TEST_DOMAINS:
+            cur.execute(
+                "UPDATE freelancer SET is_deleted=1, is_enabled=0 WHERE LOWER(email) LIKE %s AND is_deleted=0",
+                (f"%{domain}",)
+            )
+            cleaned["freelancers"] += cur.rowcount
+        f.commit()
+    finally:
+        f.close()
+
+    _audit(admin_id, "cleanup_test_data", cleaned)
+    return jsonify({
+        "success": True,
+        "cleaned_clients": cleaned["clients"],
+        "cleaned_freelancers": cleaned["freelancers"],
+        "msg": f"Soft-deleted {cleaned['clients']} client(s) and {cleaned['freelancers']} freelancer(s) with test email domains."
+    })
+
+
+# ============================================================
+# EMAIL VERIFICATION (Admin Manual Override)
+# ============================================================
+
+@admin_bp.route("/admin/user/verify-email", methods=["POST"])
+@require_admin
+def admin_verify_email():
+    """
+    Allow admin to manually mark a user's email as verified.
+    Body: { role: 'client'|'freelancer', id: <user_id> }
+    """
+    import json as _json
+    d = request.get_json(silent=True) or {}
+    role = str(d.get("role", "")).strip().lower()
+    uid = int(d.get("id", 0))
+
+    if role not in ("client", "freelancer") or uid <= 0:
+        return jsonify({"success": False, "msg": "Invalid role or id"}), 400
+
+    admin_id = getattr(request, "admin_id", None)
+
+    if role == "client":
+        db = client_db()
+        try:
+            cur = db.cursor()
+            # Clients use is_enabled as a proxy for active; add email_verified if column exists
+            cur.execute("UPDATE client SET is_enabled=1 WHERE id=%s AND is_deleted=0", (uid,))
+            db.commit()
+        finally:
+            db.close()
+    else:
+        db = freelancer_db()
+        try:
+            cur = db.cursor()
+            cur.execute(
+                "UPDATE freelancer_profile SET verification_status='VERIFIED', is_verified=1 WHERE freelancer_id=%s",
+                (uid,)
+            )
+            db.commit()
+        finally:
+            db.close()
+
+    _audit(admin_id, "verify_email_manual", {"role": role, "id": uid})
+    return jsonify({"success": True, "msg": f"{role.capitalize()} #{uid} email marked as verified."})

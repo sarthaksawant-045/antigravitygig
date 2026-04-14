@@ -20,6 +20,7 @@ import os
 import requests
 import secrets
 from rapidfuzz import fuzz
+import re
 import urllib.parse
 import shutil
 from email.message import EmailMessage
@@ -623,9 +624,41 @@ def create_project(hire_id):
         print(f"Error creating project: {e}")
         return False, str(e)
 
-def valid_email(email):
-    email = (email or "").strip()
-    return ("@" in email) and ("." in email)
+# ---------------------------------------------------------------------------
+# EMAIL VALIDATION HELPERS
+# ---------------------------------------------------------------------------
+
+# Domains that are reserved/test-only and must never receive real emails
+_BLOCKED_EMAIL_DOMAINS = {
+    "example.com", "example.org", "example.net",
+    "test.com", "test.org", "test.net",
+    "mailinator.com", "guerrillamail.com", "yopmail.com",
+    "tempmail.com", "throwaway.email", "trashmail.com",
+    "sharklasers.com", "guerrillamailblock.com", "grr.la",
+    "dispostable.com", "fakeinbox.com",
+}
+
+_EMAIL_REGEX = re.compile(
+    r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$'
+)
+
+
+def valid_email(email: str) -> bool:
+    """Return True only for syntactically correct email addresses."""
+    email = (email or "").strip().lower()
+    return bool(_EMAIL_REGEX.match(email))
+
+
+def is_blocked_email(email: str) -> bool:
+    """
+    Return True if the email should be blocked from sending.
+    Covers placeholder domains (example.com etc.) and structurally invalid addresses.
+    """
+    email = (email or "").strip().lower()
+    if not email or not valid_email(email):
+        return True
+    domain = email.split("@", 1)[-1]
+    return domain in _BLOCKED_EMAIL_DOMAINS
 
 def validate_input(value, max_length, field_name):
     """Validate input length and content"""
@@ -713,13 +746,37 @@ def check_unverified_completions():
         for s in stale:
             print(f"⚠️ Project {s['id']} (Hire {s['hire_id']}) is STALE COMPLETED.")
             log_admin_alert('DEADLINE_MISSED', f"Project {s['id']} unverified for > 3 days.", related_id=s['id'])
-            # Notify client again
-            send_email(
-                "client@example.com", # Should fetch actual client email
-                "⚠️ Action Required: Verify Project Completion",
-                f"Project {s['id']} has been marked as completed for 3 days. Please verify it.",
-                related_project_id=s['id']
-            )
+
+            # ── Fetch the real client email before sending ──────────────────
+            client_email = None
+            try:
+                client_conn = client_db()
+                ccur = get_dict_cursor(client_conn)
+                ccur.execute("SELECT email FROM client WHERE id = %s", (s['client_id'],))
+                crow = ccur.fetchone()
+                client_conn.close()
+                if crow:
+                    client_email = (crow.get("email") or "").strip()
+            except Exception as ce:
+                logger.warning(f"[SCHEDULER] Could not fetch client email for project {s['id']}: {ce}")
+
+            if not client_email or is_blocked_email(client_email):
+                logger.warning(
+                    f"[SCHEDULER] Skipping stale-completion email for project {s['id']}: "
+                    f"client email is missing or invalid ({client_email!r})"
+                )
+                log_admin_alert(
+                    'INVALID_CLIENT_EMAIL',
+                    f"Project {s['id']} stale — client email missing or invalid ({client_email!r})",
+                    related_id=s['id']
+                )
+            else:
+                send_email(
+                    client_email,
+                    "⚠️ Action Required: Verify Project Completion",
+                    f"Project {s['id']} has been marked as completed for 3 days. Please verify it.",
+                    related_project_id=s['id']
+                )
 
         conn.close()
     except Exception as e:
@@ -1223,7 +1280,15 @@ def _send_email_smtp(to_email, subject, body, html_body=None):
 
 
 def send_email(to_email, subject, body, related_project_id=None, html_body=None):
-    # ── Strategy 1: Brevo HTTP API (works on Render) ──
+    # ── Guard: block invalid or test/placeholder email addresses ──────────
+    if is_blocked_email(to_email):
+        reason = f"Blocked: invalid or placeholder email address ({to_email!r})"
+        logger.warning(f"[EMAIL] {reason} — skipping Brevo/SMTP call")
+        log_email(to_email, subject, body, status='Blocked',
+                  project_id=related_project_id, error_msg=reason)
+        return False, reason
+
+    # ── Strategy 1: Brevo HTTP API (works on Render) ──────────────────────
     if BREVO_API_KEY:
         logger.info(f"[EMAIL] Sending via Brevo API to {to_email}")
         ok, err = _send_email_brevo(to_email, subject, body, html_body)
@@ -1233,9 +1298,11 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
             return True, None
         else:
             logger.warning(f"[EMAIL] Brevo failed: {err}")
+            log_email(to_email, subject, body, status='Failed',
+                      project_id=related_project_id, error_msg=err)
             # fall through to SMTP if available
 
-    # ── Strategy 2: SMTP (local dev / fallback) ──
+    # ── Strategy 2: SMTP (local dev / fallback) ───────────────────────────
     if SENDER_EMAIL and APP_PASSWORD:
         logger.info(f"[EMAIL] Trying SMTP fallback to {to_email}")
         ok, err = _send_email_smtp(to_email, subject, body, html_body)
@@ -1244,10 +1311,11 @@ def send_email(to_email, subject, body, related_project_id=None, html_body=None)
             return True, None
         else:
             logger.error(f"[EMAIL] SMTP also failed: {err}")
-            log_email(to_email, subject, body, status='Failed', project_id=related_project_id, error_msg=err)
+            log_email(to_email, subject, body, status='Failed',
+                      project_id=related_project_id, error_msg=err)
             return False, err
 
-    # ── No transport available ──
+    # ── No transport available ────────────────────────────────────────────
     err = (
         f"No email transport available. "
         f"BREVO_API_KEY={'SET' if BREVO_API_KEY else 'EMPTY'}, "
